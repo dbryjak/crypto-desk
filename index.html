@@ -174,118 +174,130 @@
 
     <div class="footer">© Daniel – prywatny kokpit. Ustawienia symbolu i interwału są automatycznie zapisywane w localStorage i odtwarzane po restarcie.</div>
   </div>
+<script>
+  const $ = s=>document.querySelector(s);
 
-  <script>
-    const $ = s=>document.querySelector(s);
-    const TV_SYMBOL_KEY='tv.symbol.v1';
-    const TF_LEFT_KEY='tv.tf.left';
-    const TF_RIGHT_KEY='tv.tf.right';
+  // ===== Preferencje wykresów =====
+  const TV_SYMBOL_KEY='tv.symbol.v1';
+  const TF_LEFT_KEY='tv.tf.left';
+  const TF_RIGHT_KEY='tv.tf.right';
+  function saveTVPrefs(){ try{ localStorage.setItem(TV_SYMBOL_KEY,$('#tvSymbol').value); localStorage.setItem(TF_LEFT_KEY,$('#tfLeft').value); localStorage.setItem(TF_RIGHT_KEY,$('#tfRight').value);}catch(e){} }
+  function applySavedTVPrefs(){ try{ const s=localStorage.getItem(TV_SYMBOL_KEY); const l=localStorage.getItem(TF_LEFT_KEY); const r=localStorage.getItem(TF_RIGHT_KEY); if(s) $('#tvSymbol').value=s; if(l) $('#tfLeft').value=l; if(r) $('#tfRight').value=r;}catch(e){} }
 
-    function saveTVPrefs(){ try{ localStorage.setItem(TV_SYMBOL_KEY,$('#tvSymbol').value); localStorage.setItem(TF_LEFT_KEY,$('#tfLeft').value); localStorage.setItem(TF_RIGHT_KEY,$('#tfRight').value);}catch(e){} }
-    function applySavedTVPrefs(){ try{ const s=localStorage.getItem(TV_SYMBOL_KEY); const l=localStorage.getItem(TF_LEFT_KEY); const r=localStorage.getItem(TF_RIGHT_KEY); if(s) $('#tvSymbol').value=s; if(l) $('#tfLeft').value=l; if(r) $('#tfRight').value=r;}catch(e){} }
+  // ===== Dwa sposoby osadzania (fallback) =====
+  function tvUrlWidget(symbol, interval){
+    const p=new URLSearchParams({
+      frameElementId:'tvEmbed', symbol, interval,
+      hidesidetoolbar:'0', hidetoptoolbar:'0', symboledit:'1',
+      withdateranges:'1', toolbarbg:'f1f3f6', studies:'[]',
+      theme:'dark', style:'1', timezone:'Etc/UTC', allow_symbol_change:'1',
+      hideideas:'1', locale:'pl', uid: Date.now()+'' // cache buster
+    });
+    return 'https://s.tradingview.com/widgetembed/?'+p.toString();
+  }
+  function tvUrlAdvanced(symbol, interval){
+    const cfg = { symbol, interval, hide_top_toolbar:false, hide_side_toolbar:false,
+                  allow_symbol_change:true, locale:'pl', theme:'dark', autosize:true };
+    return 'https://s.tradingview.com/embed-widget/advanced-chart/?locale=pl#'
+           + encodeURIComponent(JSON.stringify(cfg));
+  }
 
-    function tvUrlWidget(symbol, interval){
-      const params = new URLSearchParams({
-        frameElementId:'tvEmbed', symbol, interval,
-        hidesidetoolbar:'0', hidetoptoolbar:'0', symboledit:'1',
-        withdateranges:'1', toolbarbg:'f1f3f6', studies:'[]',
-        theme:'dark', style:'1', timezone:'Etc/UTC', allow_symbol_change:'1', hideideas:'1', locale:'pl',
-        uid: Date.now()+''
-      });
-      return 'https://s.tradingview.com/widgetembed/?' + params.toString();
+  function loadInto(el, urlA, urlB, fbEl, label){
+    let loaded=false;
+    el.onload=()=>{ loaded=true; if(fbEl) fbEl.style.display='none'; };
+    el.src=urlA;                            // 1. klasyczny widget
+    setTimeout(()=>{ if(!loaded) el.src=urlB; }, 2500);  // 2. advanced-chart
+    setTimeout(()=>{ if(!loaded && fbEl){   // 3. link awaryjny
+      fbEl.style.display='block';
+      fbEl.innerHTML=`Nie udało się osadzić. <a href="${urlB}" target="_blank" rel="noopener">Otwórz ${label}</a>.`;
+    }}, 5000);
+  }
+
+  function loadBoth(){
+    saveTVPrefs();
+    const s=$('#tvSymbol').value, l=$('#tfLeft').value, r=$('#tfRight').value;
+    loadInto($('#tvLeft'),  tvUrlWidget(s,l),  tvUrlAdvanced(s,l),  $('#leftFallback'),  `Trend (${l})`);
+    loadInto($('#tvRight'), tvUrlWidget(s,r), tvUrlAdvanced(s,r), $('#rightFallback'), `Wejście (${r})`);
+    $('#tvStatus').textContent='TV: OK'; $('#tvStatus').style.color='var(--ok)';
+  }
+
+  $('#reloadBoth').addEventListener('click', loadBoth);
+  $('#tvSymbol').addEventListener('change', loadBoth);
+  $('#tfLeft').addEventListener('change', loadBoth);
+  $('#tfRight').addEventListener('change', loadBoth);
+
+  // ===== Sygnały (beta) – RSI(H4) + filtr EMA(D1) =====
+  const CG_MAP={ 'CRYPTO:BTCUSD':'bitcoin','BINANCE:BTCUSDT':'bitcoin',
+                 'CRYPTO:ETHUSD':'ethereum','BINANCE:ETHUSDT':'ethereum',
+                 'BINANCE:SOLUSDT':'solana' };
+  const cgId = ()=> CG_MAP[$('#tvSymbol').value] || 'bitcoin';
+
+  function rsi(vals, p=14){
+    if(vals.length<p+1) return null;
+    const g=[], l=[]; for(let i=1;i<vals.length;i++){ const d=vals[i]-vals[i-1]; g.push(Math.max(d,0)); l.push(Math.max(-d,0)); }
+    let ag=g.slice(0,p).reduce((a,b)=>a+b,0)/p, al=l.slice(0,p).reduce((a,b)=>a+b,0)/p;
+    for(let i=p;i<g.length;i++){ ag=(ag*(p-1)+g[i])/p; al=(al*(p-1)+l[i])/p; }
+    const rs = al===0 ? 100 : ag/al; return 100 - (100/(1+rs));
+  }
+  function ema(vals,p){ const k=2/(p+1); let e=vals[0]; for(let i=1;i<vals.length;i++) e=vals[i]*k+e*(1-k); return e; }
+
+  async function fetchH4Closes(id){ const r=await fetch(`https://api.coingecko.com/api/v3/coins/${id}/ohlc?vs_currency=usd&days=7`); const a=await r.json(); return a.map(x=>x[4]); }
+  async function fetchDailyCloses(id){ const r=await fetch(`https://api.coingecko.com/api/v3/coins/${id}/market_chart?vs_currency=usd&days=400&interval=daily`); const j=await r.json(); return j.prices.map(x=>x[1]); }
+
+  function beep(){ try{ const ctx=new (window.AudioContext||window.webkitAudioContext)(); const o=ctx.createOscillator(), g=ctx.createGain(); o.type='sine'; o.frequency.value=880; o.connect(g); g.connect(ctx.destination); o.start(); g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime+0.3); setTimeout(()=>o.stop(),320);}catch(e){} }
+
+  async function runScan(){
+    const out=[]; const id=cgId(); $('#sigStatus').textContent='Skanuję…';
+    try{
+      const h4=await fetchH4Closes(id);
+      const cur=rsi(h4,14), prev=rsi(h4.slice(0,-1),14);
+      const bounce = $('#sgRsiBounce').checked && cur!==null && prev!==null && prev<30 && cur>30;
+      const cross50= $('#sgCross50').checked && prev!==null && cur!==null && prev<50 && cur>=50;
+      out.push(`RSI(H4): ${cur?cur.toFixed(2):'n/a'}  Bounce<30: ${bounce?'TAK':'nie'}  Cross↑50: ${cross50?'TAK':'nie'}`);
+
+      let trendOk=true;
+      if($('#sgTrend').checked){
+        const d=await fetchDailyCloses(id);
+        const e50=ema(d.slice(-260),50), e200=ema(d.slice(-260),200), close=d[d.length-1];
+        trendOk = close>e50 && e50>e200;
+        out.push(`Trend(D1): close ${close.toFixed(2)} | EMA50 ${e50.toFixed(2)} | EMA200 ${e200.toFixed(2)} → ${trendOk?'OK':'NIE'}`);
+      }
+
+      const fire=(bounce||cross50)&&trendOk;
+      $('#sigStatus').textContent = fire?'Sygnał: TAK':'Sygnał: brak';
+      $('#sigStatus').style.color = fire?'var(--ok)':'var(--muted)';
+      if(fire) beep();
+    }catch(e){
+      out.push('Błąd skanera: '+e.message);
+      $('#sigStatus').textContent='Sygnały: błąd';
+      $('#sigStatus').style.color='var(--bad)';
     }
-    function tvUrlAdvanced(symbol, interval){
-      const cfg = { symbol, interval, hide_top_toolbar:false, hide_side_toolbar:false, allow_symbol_change:true, locale:'pl', theme:'dark', autosize:true };
-      return 'https://s.tradingview.com/embed-widget/advanced-chart/?locale=pl#' + encodeURIComponent(JSON.stringify(cfg));
-    };
-      return 'https://s.tradingview.com/embed-widget/advanced-chart/?locale=pl#' + encodeURIComponent(JSON.stringify(cfg));
-    }&interval=${encodeURIComponent(interval)}&hidesidetoolbar=1&hidetoptoolbar=1&symboledit=1&saveimage=1&toolbarbg=f1f3f6&studies=[]&theme=dark&style=1&timezone=Etc%2FUTC&withdateranges=1&allow_symbol_change=1&hideideas=1`; }
+    $('#sigLog').textContent = out.join('\\n');
+  }
+  $('#runScan').onclick=runScan;
+  $('#testBeep').onclick=beep;
 
-    function loadInto(el, urlPrimary, urlSecondary, fbEl, label){
-      let loaded=false; el.onload=()=>{ loaded=true; if(fbEl) fbEl.style.display='none'; };
-      el.src=urlPrimary;
-      setTimeout(()=>{ if(!loaded){ el.src=urlSecondary; } }, 3000);
-      setTimeout(()=>{ if(!loaded && fbEl){ fbEl.style.display='block'; fbEl.innerHTML = `Nie udało się osadzić. <a href="${urlSecondary}" target="_blank" rel="noopener">Otwórz ${label}</a>.`; } }, 6000);
-    }
-    function loadBoth(){
-      saveTVPrefs();
-      const s=$('#tvSymbol').value; const l=$('#tfLeft').value, r=$('#tfRight').value;
-      const l1=tvUrlWidget(s,l), l2=tvUrlAdvanced(s,l);
-      const r1=tvUrlWidget(s,r), r2=tvUrlAdvanced(s,r);
-      loadInto($('#tvLeft'), l1, l2, $('#leftFallback'), `Trend (${l})`);
-      loadInto($('#tvRight'), r1, r2, $('#rightFallback'), `Wejście (${r})`);
-      $('#tvStatus').textContent='TV: OK'; $('#tvStatus').style.color='var(--ok)';
-    }" target="_blank" rel="noopener">Trend (${l})</a>`;
-        rf.innerHTML = `Jeśli wykres się nie wyświetla, otwórz: <a href="${rUrl}" target="_blank" rel="noopener">Wejście (${r})</a>`;
-        lf.style.display='block'; rf.style.display='block';
-      }, 4000);
-    }
+  // ===== Auto-scan (OFF/5/15/30/60/240) =====
+  const SCAN_EVERY_KEY='scan.every.v1';
+  let scanTimer=null, tickTimer=null, nextAt=null, isScanning=false;
+  const minutesToMs=m=>m*60000, fmtTime=ts=>new Date(ts).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+  function setScanInfo(t){ $('#scanInfo').textContent=t; }
+  function clearAutoScan(){ if(scanTimer){clearTimeout(scanTimer); scanTimer=null;} if(tickTimer){clearInterval(tickTimer); tickTimer=null;} nextAt=null; }
+  function scheduleNext(){
+    const every=parseInt($('#scanEvery').value,10);
+    if(!every){ clearAutoScan(); setScanInfo('Auto-scan: OFF'); return; }
+    const ms=minutesToMs(every); nextAt=Date.now()+ms;
+    setScanInfo(`Auto-scan: co ${every} min • następny ≈ ${fmtTime(nextAt)}`);
+    clearAutoScan();
+    tickTimer=setInterval(()=>{ if(!nextAt) return; const mins=Math.max(0,Math.round((nextAt-Date.now())/60000)); setScanInfo(`Auto-scan: co ${every} min • następny ≈ ${fmtTime(nextAt)} (${mins}m)`); },15000);
+    scanTimer=setTimeout(async()=>{ if(isScanning) return; isScanning=true; await runScan(); isScanning=false; scheduleNext(); }, ms);
+  }
+  function applySavedScan(){ try{ const v=localStorage.getItem(SCAN_EVERY_KEY); if(v) $('#scanEvery').value=v; scheduleNext(); }catch(e){} }
+  $('#scanEvery').addEventListener('change', ()=>{ localStorage.setItem(SCAN_EVERY_KEY,$('#scanEvery').value); scheduleNext(); });
+  document.addEventListener('visibilitychange', ()=>{ if(document.hidden){ clearAutoScan(); } else { scheduleNext(); } });
 
-    $('#reloadBoth').addEventListener('click', loadBoth);
-    $('#tvSymbol').addEventListener('change', loadBoth);
-    $('#tfLeft').addEventListener('change', loadBoth);
-    $('#tfRight').addEventListener('change', loadBoth);
-    window.addEventListener('load', ()=>{ applySavedTVPrefs(); loadBoth(); applySavedScan(); });
+  // start
+  window.addEventListener('load', ()=>{ applySavedTVPrefs(); loadBoth(); applySavedScan(); });
+</script>
 
-    // ===== Sygnały (beta) =====
-    const CG_MAP={ 'CRYPTO:BTCUSD':'bitcoin', 'BINANCE:BTCUSDT':'bitcoin', 'CRYPTO:ETHUSD':'ethereum', 'BINANCE:ETHUSDT':'ethereum', 'BINANCE:SOLUSDT':'solana' };
-    function cgId(){ const s=$('#tvSymbol').value; return CG_MAP[s]||'bitcoin'; }
-
-    function rsi(values, period=14){ if(values.length<period+1) return null; const gains=[]; const losses=[]; for(let i=1;i<values.length;i++){ const ch=values[i]-values[i-1]; gains.push(Math.max(ch,0)); losses.push(Math.max(-ch,0)); }
-      let avgGain = gains.slice(0,period).reduce((a,b)=>a+b,0)/period; let avgLoss = losses.slice(0,period).reduce((a,b)=>a+b,0)/period; for(let i=period;i<gains.length;i++){ avgGain=(avgGain*(period-1)+gains[i])/period; avgLoss=(avgLoss*(period-1)+losses[i])/period; }
-      const rs = avgLoss===0? 100 : avgGain/avgLoss; const rsi = 100 - (100/(1+rs)); return rsi; }
-
-    function ema(values, period){ const k=2/(period+1); let emaVal=values[0]; for(let i=1;i<values.length;i++){ emaVal = values[i]*k + emaVal*(1-k); } return emaVal; }
-
-    async function fetchH4Prices(id){ const url=`https://api.coingecko.com/api/v3/coins/${id}/ohlc?vs_currency=usd&days=7`; const r=await fetch(url); const arr=await r.json(); return arr.map(x=>x[4]); }
-    async function fetchDailyCloses(id){ const url=`https://api.coingecko.com/api/v3/coins/${id}/market_chart?vs_currency=usd&days=400&interval=daily`; const r=await fetch(url); const j=await r.json(); return j.prices.map(x=>x[1]); }
-
-    function beep(){ try{ const ctx=new (window.AudioContext||window.webkitAudioContext)(); const o=ctx.createOscillator(); const g=ctx.createGain(); o.type='sine'; o.frequency.value=880; o.connect(g); g.connect(ctx.destination); o.start(); g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime+0.3); setTimeout(()=>o.stop(), 320); }catch(e){} }
-
-    async function runScan(){ const out=[]; const id=cgId(); $('#sigStatus').textContent='Skanuję…'; try{
-        const h4=await fetchH4Prices(id); const last=h4[h4.length-1];
-        const rsiVal=rsi(h4,14);
-        let rsiBounce=false, rsiCross50=false;
-        if($('#sgRsiBounce').checked){ rsiBounce = rsiVal!==null && rsiVal>30 && rsi(h4.slice(0,-1),14)<30; }
-        if($('#sgCross50').checked){ const rPrev = rsi(h4.slice(0,-1),14); rsiCross50 = rPrev!==null && rPrev<50 && rsiVal>=50; }
-        out.push(`RSI(H4): ${rsiVal?rsiVal.toFixed(2):'n/a'}  Bounce<30: ${rsiBounce?'TAK':'nie'}  Cross↑50: ${rsiCross50?'TAK':'nie'}`);
-        let trendOk=true; if($('#sgTrend').checked){ const d=await fetchDailyCloses(id); const ema50=ema(d.slice(-260),50); const ema200=ema(d.slice(-260),200); const close=d[d.length-1]; trendOk = close>ema50 && ema50>ema200; out.push(`Trend(D1): close ${close.toFixed(2)} | EMA50 ${ema50.toFixed(2)} | EMA200 ${ema200.toFixed(2)} → ${trendOk?'OK':'NIE'}`); }
-        const fire = (rsiBounce||rsiCross50) && trendOk; $('#sigStatus').textContent = fire? 'Sygnał: TAK' : 'Sygnał: brak'; $('#sigStatus').style.color = fire? 'var(--ok)':'var(--muted)'; if(fire) beep();
-      }catch(e){ out.push('Błąd skanera: '+e.message); $('#sigStatus').textContent='Sygnały: błąd'; $('#sigStatus').style.color='var(--bad)'; }
-      $('#sigLog').textContent = out.join('
-'); }
-
-    $('#runScan').onclick=runScan; $('#testBeep').onclick=beep;
-
-    // ===== Auto‑scan =====
-    const SCAN_EVERY_KEY='scan.every.v1';
-    let scanTimer=null, tickTimer=null, nextAt=null, isScanning=false;
-
-    function minutesToMs(m){ return m*60000; }
-    function fmtTime(ts){ const d=new Date(ts); return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}); }
-    function setScanInfo(txt){ $('#scanInfo').textContent = txt; }
-
-    function clearAutoScan(){ if(scanTimer){ clearTimeout(scanTimer); scanTimer=null;} if(tickTimer){ clearInterval(tickTimer); tickTimer=null;} nextAt=null; }
-
-    function scheduleNext(){ const every = parseInt($('#scanEvery').value,10); if(!every){ clearAutoScan(); setScanInfo('Auto‑scan: OFF'); return; }
-      const now=Date.now(); const ms=minutesToMs(every); nextAt = now + ms; setScanInfo(`Auto‑scan: co ${every} min • następny ≈ ${fmtTime(nextAt)}`);
-      clearAutoScan();
-      tickTimer = setInterval(()=>{ if(!nextAt) return; const mins=Math.max(0, Math.round((nextAt-Date.now())/60000)); $('#scanInfo').textContent = `Auto‑scan: co ${every} min • następny ≈ ${fmtTime(nextAt)} (${mins}m)`; }, 15000);
-      scanTimer = setTimeout(async ()=>{ if(isScanning) return; isScanning=true; await runScan(); isScanning=false; scheduleNext(); }, ms);
-    }
-
-    function applySavedScan(){ try{ const v=localStorage.getItem(SCAN_EVERY_KEY); if(v){ $('#scanEvery').value=v; } scheduleNext(); }catch(e){} }
-
-    $('#scanEvery').addEventListener('change', ()=>{ localStorage.setItem(SCAN_EVERY_KEY, $('#scanEvery').value); scheduleNext(); });
-
-    document.addEventListener('visibilitychange', ()=>{ if(document.hidden){ clearAutoScan(); } else { scheduleNext(); } });
-
-    // ===== Auto-scan co X minut =====
-    let autoScanTimer=null;
-    function setAutoScan(mins){ if(autoScanTimer) clearInterval(autoScanTimer); if(mins>0){ autoScanTimer=setInterval(runScan, mins*60000); } }
-
-    // Dodaj selektor interwału w UI
-    const sel=document.createElement('select');
-    sel.innerHTML='<option value="0">Auto-scan: wył</option><option value="5">co 5 min</option><option value="15">co 15 min</option><option value="30">co 30 min</option><option value="60">co 1h</option><option value="240">co 4h</option>';
-    sel.onchange=()=>setAutoScan(parseInt(sel.value));
-    document.querySelector('.row').appendChild(sel);
+  
