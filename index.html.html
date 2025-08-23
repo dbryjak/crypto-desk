@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Daniel – Crypto Desk (v3)</title>
+  <meta name="description" content="Kokpit: strategia, wykres TradingView (fallback + offline toggle), portfel + dziennik." />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#0b0e14;--panel:#121826;--muted:#9aa4b2;--text:#e5e7eb;--accent:#22d3ee;--accent2:#8b5cf6;--bad:#fca5a5;--ok:#86efac}
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0;background:linear-gradient(180deg,#0b0e14 0%, #0f1524 100%);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;color:var(--text)}
+    .wrap{max-width:1100px;margin:0 auto;padding:18px}
+    header{display:flex;gap:12px;align-items:center;justify-content:space-between;margin-bottom:16px}
+    .brand{display:flex;align-items:center;gap:10px}
+    .logo{width:38px;height:38px;border-radius:10px;background:radial-gradient(60% 60% at 50% 50%, var(--accent) 0%, var(--accent2) 100%);box-shadow:0 0 20px rgba(34,211,238,.35)}
+    h1{font-size:22px;margin:0;font-weight:800;letter-spacing:.2px}
+    .grid{display:grid;gap:16px}
+    @media(min-width:940px){.grid{grid-template-columns:1.2fr .8fr}}
+    .card{background:rgba(255,255,255,.04);backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:14px}
+    .card h2{font-size:16px;margin:0 0 8px;font-weight:800}
+    .muted{color:var(--muted);font-size:13px}
+    .kicker{font-size:12px;color:#a5f3fc;text-transform:uppercase;letter-spacing:.12em}
+    .list{margin:8px 0 0;padding-left:18px}
+    .list li{margin:6px 0}
+    .pill{display:inline-flex;gap:6px;align-items:center;border:1px solid rgba(255,255,255,.15);border-radius:999px;padding:6px 10px;font-size:12px}
+    .row{display:flex;gap:8px;flex-wrap:wrap}
+    input,select,button,textarea{background:#0c1220;border:1px solid rgba(255,255,255,.12);color:var(--text);border-radius:10px;padding:8px 10px;font-size:14px}
+    button{cursor:pointer}
+    table{width:100%;border-collapse:collapse}
+    th,td{border-bottom:1px solid rgba(255,255,255,.08);padding:8px;text-align:left;font-size:13px}
+    .right{text-align:right}
+    .green{color:var(--ok)}
+    .red{color:var(--bad)}
+    .status{display:inline-block;border-radius:8px;padding:4px 8px;font-size:12px;border:1px solid rgba(255,255,255,.15)}
+    .footer{margin:22px 0 8px;color:var(--muted);font-size:12px}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="brand"><div class="logo"></div><div>
+        <h1>Daniel – Crypto Desk</h1>
+        <div class="muted">strategia • wykres • portfel • dziennik • zapamiętywanie ustawień</div>
+      </div></div>
+      <div class="row">
+        <button class="pill" id="installPWA" title="Dodaj na ekran główny">➕ Dodaj do telefonu</button>
+        <a class="pill" href="#" id="exportAll">⬇️ Eksport danych</a>
+        <label class="pill" style="gap:4px">⬆️ Import <input type="file" id="importAll" accept="application/json" style="display:none"></label>
+      </div>
+    </header>
+
+    <div class="grid">
+      <!-- LEWA: WYKRES -->
+      <section class="card" style="min-height:420px">
+        <div class="kicker">Wykres</div>
+        <h2>TradingView</h2>
+        <div class="row">
+          <select id="tvSymbol">
+            <option value="CRYPTO:BTCUSD">BTCUSD</option>
+            <option value="CRYPTO:ETHUSD">ETHUSD</option>
+            <option value="BINANCE:BTCUSDT">BTC/USDT (Binance)</option>
+            <option value="BINANCE:ETHUSDT">ETH/USDT (Binance)</option>
+            <option value="BINANCE:SOLUSDT">SOL/USDT</option>
+          </select>
+          <select id="tvInterval">
+            <option value="D">D1</option>
+            <option value="240">H4</option>
+            <option value="60">H1</option>
+            <option value="W">W1</option>
+          </select>
+          <button id="reloadTV">Załaduj wykres</button>
+          <label class="pill" style="gap:6px;align-items:center"><input type="checkbox" id="tvOffline"> Tryb offline (blokuj TV)</label>
+          <span id="tvStatus" class="status muted">TV: niezaładowany</span>
+        </div>
+        <div id="tvWidget" style="height:360px;margin-top:8px"></div>
+        <div class="muted" style="margin-top:8px">Jeśli przeglądarka pyta o dostęp do <code>s.tradingview.com</code> / <code>s3.tradingview.com</code>, wybierz "Zezwól zawsze" lub dodaj wyjątek w blokerze. Na plikach lokalnych (file://, content://) niektóre przeglądarki pytają przy każdym starcie – najlepiej wystawić plik pod https (np. Netlify/GitHub Pages).</div>
+      </section>
+
+      <!-- PRAWA: ŚCIANKA -->
+      <section class="card">
+        <div class="kicker">Strategia</div>
+        <h2>Ścianka w garażu – skrót hybrydy</h2>
+        <ol class="list">
+          <li><b>Filtr (W1):</b> cena &gt; EMA50 &gt; EMA200 i RSI&gt;50 → long bias.</li>
+          <li><b>Miejsca (D1):</b> Fibo 38–62%, EMA50/200, poziomy S/R.</li>
+          <li><b>Sygnał (H4):</b> RSI&lt;30 zawraca + świeca odwrócenia.</li>
+          <li><b>SL:</b> pod dołkiem lub 1,5×ATR; R=0,5–1%.</li>
+          <li><b>TP1 1,5R</b> (30–50% + BE); <b>TP2 3R</b> / poprzedni szczyt; reszta trail po EMA20 D1.</li>
+          <li><b>Alerty:</b> RSI H4↑30; cena w boxie Fibo; D1≈EMA200; RSI D1&gt;70.</li>
+        </ol>
+      </section>
+
+      <!-- PORTFEL -->
+      <section class="card">
+        <div class="kicker">Portfel</div>
+        <h2>Tracker (localStorage + CoinGecko)</h2>
+        <div class="row">
+          <input id="sym" placeholder="symbol (btc, eth, sol)" />
+          <input id="qty" type="number" step="any" placeholder="ilość" />
+          <input id="cost" type="number" step="any" placeholder="koszt bazowy (USD)" />
+          <button class="btn" id="addPos">Dodaj</button>
+        </div>
+        <table id="pfTable" style="margin-top:10px">
+          <thead>
+            <tr><th>Krypto</th><th class="right">Ilość</th><th class="right">Cena</th><th class="right">Wartość</th><th class="right">Koszt</th><th class="right">P/L</th><th></th></tr>
+          </thead>
+          <tbody></tbody>
+          <tfoot>
+            <tr><th colspan="3">Razem</th><th class="right" id="sumVal">–</th><th class="right" id="sumCost">–</th><th class="right" id="sumPL">–</th><th></th></tr>
+          </tfoot>
+        </table>
+        <div class="muted">Dane trzymane tylko u Ciebie (localStorage). Ceny z CoinGecko.</div>
+      </section>
+
+      <!-- DZIENNIK + TESTY -->
+      <section class="card">
+        <div class="kicker">Dziennik</div>
+        <h2>Transakcje (CSV/JSON)</h2>
+        <div class="row">
+          <input id="jDate" type="date" />
+          <input id="jSetup" placeholder="Setup: Trend/Strefa/Sygnał" />
+          <input id="jEntry" placeholder="Wejście / SL / TP" />
+          <input id="jReason" placeholder="Powód wejścia" />
+          <input id="jPlan" placeholder="Plan zarządzania" />
+          <input id="jResult" placeholder="Wynik (+/- R)" />
+          <input id="jLesson" placeholder="Lekcja" />
+          <button id="addLog" class="btn">Dodaj wpis</button>
+        </div>
+        <table id="logTable" style="margin-top:10px">
+          <thead>
+            <tr><th>Data</th><th>Setup</th><th>Wejście/SL/TP</th><th>Powód</th><th>Plan</th><th>Wynik</th><th>Lekcja</th><th></th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+        <div class="row" style="margin-top:8px">
+          <button id="exportCSV">Eksport CSV</button>
+          <button id="clearLog">Wyczyść dziennik</button>
+          <button id="runTests">Self‑testy</button>
+          <span class="status" id="tvBadge">TV: ?</span>
+          <span class="status" id="cgBadge">CG: ?</span>
+          <span class="status" id="lsBadge">LS: ?</span>
+        </div>
+        <div id="testLog" class="muted" style="margin-top:8px;white-space:pre-wrap"></div>
+      </section>
+    </div>
+
+    <div class="footer">© Daniel – prywatny kokpit. Brak kluczy API. Chcesz – dorobimy tryb read‑only z giełdą.</div>
+  </div>
+
+  <script>
+    // ===== helpers =====
+    const $ = s=>document.querySelector(s); const $$ = s=>document.querySelectorAll(s);
+
+    // ===== TradingView loader z fallbackiem i trybem offline =====
+    const TV_SCRIPT_CDNS=['https://s.tradingview.com/tv.js','https://s3.tradingview.com/tv.js'];
+    const TV_SYMBOL_KEY='tv.symbol.v1';
+    const TV_INTERVAL_KEY='tv.interval.v1';
+    const TV_OFFLINE_KEY='tv.offline.v1';
+    let tv=null, tvReady=false;
+
+    function saveTVPrefs(){ try{ localStorage.setItem(TV_SYMBOL_KEY,$('#tvSymbol').value); localStorage.setItem(TV_INTERVAL_KEY,$('#tvInterval').value);}catch(e){} }
+    function applyTVPrefs(){ try{ const s=localStorage.getItem(TV_SYMBOL_KEY); const i=localStorage.getItem(TV_INTERVAL_KEY); const off=localStorage.getItem(TV_OFFLINE_KEY)==='1'; if(s) $('#tvSymbol').value=s; if(i) $('#tvInterval').value=i; $('#tvOffline').checked = off; }catch(e){} }
+    function setTVBadge(ok,msg){ const el=$('#tvBadge')||$('#tvStatus'); if(!el) return; el.textContent=(msg|| (ok?'TV: OK':'TV: BŁĄD')); el.style.color= ok?'var(--ok)':'var(--bad)'; el.style.borderColor= ok?'rgba(134,239,172,.6)':'rgba(252,165,165,.6)'; }
+
+    async function loadTVScript(){
+      if(window.TradingView) return;
+      let lastErr=null; for(const url of TV_SCRIPT_CDNS){
+        lastErr=null; await new Promise((resolve)=>{
+          const s=document.createElement('script'); s.src=url; s.async=true; s.defer=true;
+          s.onload=()=> resolve(); s.onerror=()=> resolve(); document.head.appendChild(s);
+          setTimeout(resolve, 12000); // timeout
+        });
+        if(window.TradingView) return; else lastErr = new Error('Nie udało się z: '+url);
+      }
+      if(!window.TradingView) throw lastErr||new Error('Brak tv.js');
+    }
+
+    async function initTV(){
+      applyTVPrefs();
+      if($('#tvOffline').checked){
+        localStorage.setItem(TV_OFFLINE_KEY,'1');
+        $('#tvWidget').innerHTML='<div class="muted">Tryb offline: wykres wyłączony. Kliknij „Załaduj wykres” aby włączyć.</div>';
+        setTVBadge(true,'TV: offline');
+        return;
+      } else {
+        localStorage.setItem(TV_OFFLINE_KEY,'0');
+      }
+      $('#tvWidget').innerHTML='<div class="muted">Ładuję wykres…</div>';
+      try{
+        await loadTVScript(); setTVBadge(true,'TV: skrypt OK');
+        if(!tv){
+          tv = new TradingView.widget({
+            container_id:'tvWidget', autosize:true,
+            symbol: $('#tvSymbol').value, interval: $('#tvInterval').value,
+            timezone:'Etc/UTC', theme:'dark', style:'1', locale:'pl', allow_symbol_change:true,
+            studies:['RSI@tv-basicstudies','MAExp@tv-basicstudies','MAExp@tv-basicstudies']
+          });
+          tv.onChartReady(()=>{ tvReady=true; });
+        }
+      }catch(e){
+        setTVBadge(false,'TV: błąd');
+        $('#tvWidget').innerHTML = `<div class="muted">Nie mogę połączyć z TradingView (${e.message}).\nJeżeli to plik lokalny (file://, content://), upraszczam: wystaw plik pod https (Netlify/GitHub Pages) lub dodaj stały wyjątek w blokerze dla s.tradingview.com / s3.tradingview.com.</div>`;
+      }
+    }
+
+    function updateTV(){
+      saveTVPrefs();
+      if($('#tvOffline').checked){ localStorage.setItem(TV_OFFLINE_KEY,'1'); setTVBadge(true,'TV: offline'); $('#tvWidget').innerHTML='<div class="muted">Tryb offline: wykres wyłączony.</div>'; return; }
+      if(tv && tvReady){
+        try{ tv.chart().setSymbol($('#tvSymbol').value, ()=>{}); }catch(e){}
+        try{ tv.chart().setResolution($('#tvInterval').value, ()=>{}); }catch(e){}
+      } else {
+        initTV();
+      }
+    }
+
+    $('#reloadTV').onclick = ()=> initTV();
+    $('#tvSymbol').onchange = ()=> updateTV();
+    $('#tvInterval').onchange = ()=> updateTV();
+    $('#tvOffline').onchange = ()=> updateTV();
+
+    window.addEventListener('load', initTV);
+
+    // ===== Portfel (localStorage + CG) =====
+    const PF_KEY='pf.v1'; const pf=JSON.parse(localStorage.getItem(PF_KEY)||'[]');
+    async function priceUSD(sym){ const map={btc:'bitcoin',eth:'ethereum',sol:'solana',ada:'cardano',avax:'avalanche-2',ltc:'litecoin'}; const id=map[sym.toLowerCase()]||sym.toLowerCase(); const r=await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(id)}&vs_currencies=usd`); const j=await r.json(); return j[id]&&j[id].usd?+j[id].usd:0; }
+    function savePF(){ localStorage.setItem(PF_KEY, JSON.stringify(pf)); }
+    async function renderPF(){ const tb=$('#pfTable tbody'); tb.innerHTML=''; let sumV=0,sumC=0; for(const [i,pos] of pf.entries()){ let p=0; try{ p=await priceUSD(pos.sym);}catch(e){} const val=p*pos.qty, cost=pos.cost*pos.qty, pl=val-cost; sumV+=val; sumC+=cost; const tr=document.createElement('tr'); tr.innerHTML=`<td>${pos.sym.toUpperCase()}</td><td class="right">${pos.qty}</td><td class="right">$${p.toFixed(2)}</td><td class="right">$${val.toFixed(2)}</td><td class="right">$${cost.toFixed(2)}</td><td class="right ${pl>=0?'green':'red'}">$${pl.toFixed(2)}</td><td><button data-i="${i}" class="del">Usuń</button></td>`; tb.appendChild(tr);} $('#sumVal').textContent=`$${sumV.toFixed(2)}`; $('#sumCost').textContent=`$${sumC.toFixed(2)}`; const spl=sumV-sumC; $('#sumPL').textContent=`$${spl.toFixed(2)}`; $('#sumPL').className=`right ${spl>=0?'green':'red'}`; $$('#pfTable .del').forEach(b=> b.onclick=()=>{ pf.splice(+b.dataset.i,1); savePF(); renderPF();}); }
+    $('#addPos').onclick=()=>{ const sym=$('#sym').value.trim(); const qty=parseFloat($('#qty').value); const cost=parseFloat($('#cost').value); if(!sym||!qty||!cost){alert('Uzupełnij symbol, ilość i koszt.'); return;} pf.push({sym,qty,cost}); savePF(); renderPF(); $('#sym').value=''; $('#qty').value=''; $('#cost').value=''; };
+    renderPF();
+
+    // ===== Dziennik =====
+    const LOG_KEY='log.v1'; const log=JSON.parse(localStorage.getItem(LOG_KEY)||'[]');
+    function saveLog(){ localStorage.setItem(LOG_KEY, JSON.stringify(log)); }
+    function renderLog(){ const tb=$('#logTable tbody'); tb.innerHTML=''; log.forEach((r,i)=>{ const tr=document.createElement('tr'); tr.innerHTML=`<td>${r.d||''}</td><td>${r.s||''}</td><td>${r.e||''}</td><td>${r.r||''}</td><td>${r.p||''}</td><td>${r.w||''}</td><td>${r.l||''}</td><td><button data-i="${i}" class="rm">Usuń</button></td>`; tb.appendChild(tr); }); $$('#logTable .rm').forEach(b=> b.onclick=()=>{ log.splice(+b.dataset.i,1); saveLog(); renderLog();}); }
+    renderLog();
+    $('#addLog').onclick=()=>{ const r={ d:$('#jDate').value, s:$('#jSetup').value, e:$('#jEntry').value, r:$('#jReason').value, p:$('#jPlan').value, w:$('#jResult').value, l:$('#jLesson').value }; log.push(r); saveLog(); renderLog(); ['#jDate','#jSetup','#jEntry','#jReason','#jPlan','#jResult','#jLesson'].forEach(id=> $(id).value=''); };
+
+    // ===== Backup =====
+    $('#exportAll').onclick=()=>{ const blob=new Blob([JSON.stringify({pf,log},null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='crypto_desk_backup.json'; a.click(); };
+    $('#importAll').onchange=ev=>{ const f=ev.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=()=>{ try{ const data=JSON.parse(r.result); if(data.pf){ localStorage.setItem(PF_KEY, JSON.stringify(data.pf)); } if(data.log){ localStorage.setItem(LOG_KEY, JSON.stringify(data.log)); } location.reload(); }catch(e){ alert('Błędny plik.'); } }; r.readAsText(f); };
+
+    // ===== PWA =====
+    let deferredPrompt; window.addEventListener('beforeinstallprompt', e=>{ e.preventDefault(); deferredPrompt=e; $('#installPWA').style.display='inline-flex'; });
+    $('#installPWA').onclick=()=>{ if(deferredPrompt){ deferredPrompt.prompt(); deferredPrompt=null; } else { alert('Android: Menu przeglądarki → "Dodaj do ekranu głównego".'); } };
+
+    // ===== Self‑tests =====
+    function badge(el, ok, msg){ el.textContent = msg || (ok?'OK':'BŁĄD'); el.style.color=ok?'var(--ok)':'var(--bad)'; el.style.borderColor=ok?'rgba(134,239,172,.6)':'rgba(252,165,165,.6)'; }
+    async function runTests(){ const out=[]; const log=s=>{ out.push(s); $('#testLog').textContent=out.join('\n'); };
+      try{ await loadTVScript(); badge($('#tvBadge'),true,'TV: OK'); log('TradingView: OK'); } catch(e){ badge($('#tvBadge'),false,'TV: BŁĄD'); log('TradingView: '+e.message); }
+      try{ const p=await priceUSD('btc'); badge($('#cgBadge'), p>0, p>0?('CG: $'+p.toFixed(2)):'CG: BŁĄD'); log('CoinGecko: '+(p>0?('$'+p.toFixed(2)):'BŁĄD')); } catch(e){ badge($('#cgBadge'),false,'CG: BŁĄD'); log('CoinGecko: '+e.message); }
+      try{ localStorage.setItem('t','1'); const v=localStorage.getItem('t'); localStorage.removeItem('t'); badge($('#lsBadge'), v==='1', v==='1'?'LS: OK':'LS: BLOKADA'); log('localStorage: '+(v==='1'?'OK':'BLOKADA')); } catch(e){ badge($('#lsBadge'),false,'LS: BLOKADA'); log('localStorage: '+e.message); }
+    }
+    $('#runTests').onclick=runTests;
+  </script>
+</body>
+</html>
