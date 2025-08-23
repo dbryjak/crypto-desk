@@ -3,33 +3,42 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Daniel – Crypto Desk (v8)</title>
-  <meta name="description" content="Kokpit: strategia, wykres TradingView (autostart/offline/retry + fallback link), portfel + dziennik." />
+  <title>Daniel – Crypto Desk</title>
+  <meta name="description" content="Prywatny kokpit: strategia hybrydowa, wykres TradingView, portfel + dziennik transakcji (localStorage)." />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
   <style>
-    :root{--bg:#0b0e14;--panel:#121826;--muted:#9aa4b2;--text:#e5e7eb;--ok:#86efac;--bad:#fca5a5;--accent:#22d3ee;--accent2:#8b5cf6}
+    :root{--bg:#0b0e14;--panel:#121826;--muted:#9aa4b2;--text:#e5e7eb;--accent:#22d3ee;--accent2:#8b5cf6;--bad:#fca5a5;--ok:#86efac}
     *{box-sizing:border-box}
-    body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto}
-    .wrap{max-width:1150px;margin:0 auto;padding:16px}
-    header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
-    .brand{display:flex;gap:10px;align-items:center}
-    .logo{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent2));box-shadow:0 0 20px rgba(34,211,238,.35)}
-    h1{font-size:20px;margin:0;font-weight:800}
-    .muted{color:var(--muted)}
-    .grid{display:grid;gap:14px}
-    @media(min-width:960px){.grid{grid-template-columns:1.2fr .8fr}}
-    .card{background:#111827;border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:12px}
-    .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-    select,button,input,textarea{background:#0c1220;border:1px solid #2a3346;color:var(--text);border-radius:10px;padding:8px 10px}
-    button{cursor:pointer}
-    .status{padding:4px 8px;border:1px solid #2a3346;border-radius:8px;font-size:12px}
-    table{width:100%;border-collapse:collapse}
-    th,td{padding:8px;border-bottom:1px solid rgba(255,255,255,.08);text-align:left;font-size:13px}
-    .right{text-align:right}
-    .green{color:var(--ok)}.red{color:var(--bad)}
+    html,body{height:100%}
+    body{margin:0;background:linear-gradient(180deg,#0b0e14 0%, #0f1524 100%);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;color:var(--text)}
+    .wrap{max-width:1300px;margin:0 auto;padding:18px}
+    header{display:flex;gap:12px;align-items:center;justify-content:space-between;margin-bottom:16px}
+    .brand{display:flex;align-items:center;gap:10px}
+    .logo{width:38px;height:38px;border-radius:10px;background:radial-gradient(60% 60% at 50% 50%, var(--accent) 0%, var(--accent2) 100%);box-shadow:0 0 20px rgba(34,211,238,.35)}
+    h1{font-size:22px;margin:0;font-weight:800;letter-spacing:.2px}
+    .grid{display:grid;gap:16px}
+    @media(min-width:940px){.grid-3{grid-template-columns:repeat(3,1fr)}}
+    .card{background:rgba(255,255,255,.04);backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:14px}
+    .card h2{font-size:16px;margin:0 0 8px;font-weight:800}
+    .card h3{font-size:14px;margin:10px 0 6px;font-weight:800;color:#c7d2fe}
+    .muted{color:var(--muted);font-size:13px}
     .kicker{font-size:12px;color:#a5f3fc;text-transform:uppercase;letter-spacing:.12em}
+    .list{margin:8px 0 0;padding-left:18px}
+    .list li{margin:6px 0}
+    .pill{display:inline-flex;gap:6px;align-items:center;border:1px solid rgba(255,255,255,.15);border-radius:999px;padding:6px 10px;font-size:12px}
+    .row{display:flex;gap:8px;flex-wrap:wrap}
+    input,select,button,textarea{background:#0c1220;border:1px solid rgba(255,255,255,.12);color:var(--text);border-radius:10px;padding:8px 10px;font-size:14px}
+    button{cursor:pointer}
+    table{width:100%;border-collapse:collapse;}
+    th,td{border-bottom:1px solid rgba(255,255,255,.08);padding:8px;text-align:left;font-size:13px}
+    .right{text-align:right}
+    .green{color:var(--ok)}
+    .red{color:var(--bad)}
+    .footer{margin:22px 0 8px;color:var(--muted);font-size:12px}
+    .btn{background:linear-gradient(90deg,var(--accent),var(--accent2));border:none}
+    .status{display:inline-block;border-radius:8px;padding:4px 8px;font-size:12px;border:1px solid rgba(255,255,255,.15)}
   </style>
 </head>
 <body>
@@ -37,91 +46,85 @@
     <header>
       <div class="brand"><div class="logo"></div><div>
         <h1>Daniel – Crypto Desk</h1>
-        <div class="muted">strategia • wykres • portfel • dziennik • zapamiętywanie ustawień</div>
+        <div class="muted">Twój prywatny kokpit: strategia • wykres • portfel • dziennik • (zapamiętywanie ustawień działa automatycznie)</div>
       </div></div>
       <div class="row">
-        <button id="installPWA">➕ Dodaj do telefonu</button>
-        <a id="exportAll" href="#">⬇️ Eksport danych</a>
-        <label>⬆️ Import <input id="importAll" type="file" accept="application/json" style="display:none"></label>
+        <button class="pill" id="installPWA" title="Dodaj na ekran główny">➕ Dodaj do telefonu</button>
+        <a class="pill" href="#" id="exportAll">⬇️ Eksport danych</a>
+        <label class="pill" style="gap:4px">⬆️ Import <input type="file" id="importAll" accept="application/json" style="display:none"></label>
       </div>
     </header>
 
-    <div class="grid">
-      <!-- LEWA: WYKRES -->
-      <section class="card">
-        <div class="kicker">Wykres</div>
-        <h2 style="margin:6px 0 10px">TradingView</h2>
-        <div class="row">
-          <select id="tvSymbol">
-            <option value="CRYPTO:BTCUSD">BTCUSD</option>
-            <option value="CRYPTO:ETHUSD">ETHUSD</option>
-            <option value="BINANCE:BTCUSDT">BTC/USDT (Binance)</option>
-            <option value="BINANCE:ETHUSDT">ETH/USDT (Binance)</option>
-            <option value="BINANCE:SOLUSDT">SOL/USDT</option>
-            <option value="BINANCE:AVAXUSDT">AVAX/USDT</option>
-            <option value="BINANCE:ADAUSDT">ADA/USDT</option>
-            <option value="BINANCE:LTCUSDT">LTC/USDT</option>
-            <option value="BINANCE:XRPUSDT">XRP/USDT</option>
-          </select>
-          <select id="tvInterval">
-            <option value="5">5m</option>
-            <option value="15">15m</option>
-            <option value="60">H1</option>
-            <option value="120">H2</option>
-            <option value="240">H4</option>
-            <option value="720">H12</option>
-            <option value="D" selected>D1</option>
-            <option value="W">W1</option>
-          </select>
-          <label><input type="checkbox" id="tvAutostart"> Autostart</label>
-          <label><input type="checkbox" id="tvOffline"> Tryb offline (blokuj TV)</label>
-          <button id="reloadTV">Załaduj wykres</button>
-          <button id="resetTV">Reset ustawień</button>
-          <span id="tvStatus" class="status">TV: wstrzymany</span>
+    <!-- WYKRESY – 2 okna obok siebie (Multi‑TF) -->
+    <section class="card">
+      <div class="kicker">Wykresy</div>
+      <h2>TradingView – widok multi‑TF (W1 + H4)</h2>
+      <div class="row" style="margin-bottom:8px">
+        <select id="tvSymbol">
+          <option value="CRYPTO:BTCUSD">BTCUSD</option>
+          <option value="CRYPTO:ETHUSD">ETHUSD</option>
+          <option value="BINANCE:BTCUSDT">BTC/USDT (Binance)</option>
+          <option value="BINANCE:ETHUSDT">ETH/USDT (Binance)</option>
+          <option value="BINANCE:SOLUSDT">SOL/USDT</option>
+        </select>
+        <button id="reloadBoth">Załaduj / Odśwież oba</button>
+        <span id="tvStatus" class="status muted">TV: niezaładowany</span>
+      </div>
+      <div class="grid" style="grid-template-columns:1fr 1fr; gap:12px">
+        <div>
+          <div class="row" style="justify-content:space-between"><strong>Trend (W1)</strong>
+            <label>Interwał: <select id="tfLeft"><option value="W" selected>W1</option><option value="D">D1</option></select></label>
+          </div>
+          <iframe id="tvLeft" style="width:100%;height:420px;margin-top:6px;border:none"></iframe>
+          <div class="muted">W1: ustaw EMA50/EMA200 (trend).</div>
         </div>
-        <div id="tvWidget" style="height:420px;margin-top:10px" class="muted">Kliknij „Załaduj wykres” lub włącz Autostart. W trybie offline wykres jest wyłączony.</div>
-        <div class="muted" style="margin-top:8px">Jeśli przeglądarka pyta o dostęp do domen TradingView, wybierz „Zezwól zawsze”. Jeżeli widget się nie pojawi, pokażę **link do wykresu** (fallback).</div>
-      </section>
+        <div>
+          <div class="row" style="justify-content:space-between"><strong>Wejście (H4)</strong>
+            <label>Interwał: <select id="tfRight"><option value="240" selected>H4</option><option value="60">H1</option><option value="120">H2</option></select></label>
+          </div>
+          <iframe id="tvRight" style="width:100%;height:420px;margin-top:6px;border:none"></iframe>
+          <div class="muted">H4: rysuj Fibo 38–62% + poziomy S/R, obserwuj RSI.</div>
+        </div>
+      </div>
+      <h3>Sygnały (beta – z CoinGecko, bez kluczy)</h3>
+      <div class="row">
+        <label><input type="checkbox" id="sgRsiBounce" checked> RSI (H4) &lt;30 i zawraca ↑</label>
+        <label><input type="checkbox" id="sgCross50" checked> RSI (H4) przecina ↑ 50</label>
+        <label><input type="checkbox" id="sgTrend" checked> Filtr trendu: cena (D1) nad EMA50 &gt; EMA200</label>
+        <button id="runScan">Skanuj teraz</button>
+        <button id="testBeep">Test dźwięku</button>
+        <span id="sigStatus" class="status muted">Sygnały: gotowe</span>
+      </div>
+      <div id="sigLog" class="muted" style="margin-top:6px;white-space:pre-wrap"></div>
+    </section>
 
-      <!-- PRAWA: STRATEGIA -->
-      <section class="card">
-        <div class="kicker">Strategia</div>
-        <h2 style="margin:6px 0 10px">Ścianka w garażu – skrót hybrydy</h2>
-        <ol>
-          <li><b>Filtr (W1):</b> cena > EMA50 > EMA200 i RSI>50 → long bias.</li>
-          <li><b>Miejsca (D1):</b> Fibo 38–62%, EMA50/200, poziomy S/R.</li>
-          <li><b>Sygnał (H4):</b> RSI<30 zawraca + świeca odwrócenia.</li>
-          <li><b>SL:</b> pod dołkiem lub 1,5×ATR; R=0,5–1%.</li>
-          <li><b>TP1 1,5R</b> (30–50% + BE); <b>TP2 3R</b> / poprzedni szczyt; reszta trail po EMA20 D1.</li>
-          <li><b>Alerty:</b> RSI H4↑30; cena w boxie Fibo; D1≈EMA200; RSI D1>70.</li>
-        </ol>
-      </section>
-
+    <!-- DRUGI RZĄD: trzy karty obok siebie -->
+    <div class="grid grid-3">
       <!-- PORTFEL -->
       <section class="card">
         <div class="kicker">Portfel</div>
-        <h2 style="margin:6px 0 10px">Tracker (localStorage + CoinGecko)</h2>
+        <h2>Tracker (localStorage + ceny z CoinGecko)</h2>
         <div class="row">
           <input id="sym" placeholder="symbol (btc, eth, sol)" />
           <input id="qty" type="number" step="any" placeholder="ilość" />
           <input id="cost" type="number" step="any" placeholder="koszt bazowy (USD)" />
-          <button id="addPos">Dodaj</button>
+          <button class="btn" id="addPos">Dodaj</button>
         </div>
         <table id="pfTable" style="margin-top:10px">
           <thead><tr><th>Krypto</th><th class="right">Ilość</th><th class="right">Cena</th><th class="right">Wartość</th><th class="right">Koszt</th><th class="right">P/L</th><th></th></tr></thead>
           <tbody></tbody>
           <tfoot><tr><th colspan="3">Razem</th><th class="right" id="sumVal">–</th><th class="right" id="sumCost">–</th><th class="right" id="sumPL">–</th><th></th></tr></tfoot>
         </table>
-        <div class="muted">Dane tylko lokalnie. Ceny z CoinGecko.</div>
+        <div class="muted">Dane portfela są zapisywane tylko w Twojej przeglądarce. Ceny pobierane z publicznego API CoinGecko.</div>
       </section>
 
       <!-- DZIENNIK -->
       <section class="card">
         <div class="kicker">Dziennik</div>
-        <h2 style="margin:6px 0 10px">Transakcje (CSV/JSON)</h2>
+        <h2>Transakcje</h2>
         <div class="row">
           <input id="jDate" type="date" />
-          <input id="jSetup" placeholder="Setup: Trend/Strefa/Sygnał" />
+          <input id="jSetup" placeholder="Setup" />
           <input id="jEntry" placeholder="Wejście / SL / TP" />
           <input id="jReason" placeholder="Powód wejścia" />
           <input id="jPlan" placeholder="Plan zarządzania" />
@@ -136,96 +139,82 @@
         <div class="row" style="margin-top:8px">
           <button id="exportCSV">Eksport CSV</button>
           <button id="clearLog">Wyczyść dziennik</button>
-          <button id="runTests">Self‑testy</button>
-          <span class="status" id="tvBadge">TV: ?</span>
-          <span class="status" id="cgBadge">CG: ?</span>
-          <span class="status" id="lsBadge">LS: ?</span>
         </div>
-        <div id="testLog" class="muted" style="margin-top:8px;white-space:pre-wrap"></div>
+      </section>
+
+      <!-- STRATEGIA -->
+      <section class="card">
+        <div class="kicker">Strategia</div>
+        <h2>Ścianka w garażu – skrót hybrydy</h2>
+        <ol class="list">
+          <li><b>Filtr (W1):</b> cena > EMA50 > EMA200 i RSI>50.</li>
+          <li><b>Miejsca (D1):</b> Fibo 38–62%, EMA50/200, poziomy S/R.</li>
+          <li><b>Sygnał (H4):</b> RSI<30 odbija + świeca odwrócenia.</li>
+          <li><b>SL:</b> pod dołkiem lub 1,5×ATR; R=0,5–1%.</li>
+          <li><b>TP1 1,5R</b> (30–50% + BE); <b>TP2 3R</b> / poprzedni szczyt; reszta trail po EMA20 D1.</li>
+          <li><b>Alerty:</b> RSI H4↑30; cena w boxie Fibo; D1≈EMA200; RSI D1>70.</li>
+        </ol>
       </section>
     </div>
 
-    <div class="muted" style="margin-top:10px">© Daniel – prywatny kokpit. Brak kluczy API. W razie potrzeby dorobimy read‑only z giełdą.</div>
+    <div class="footer">© Daniel – prywatny kokpit. Ustawienia symbolu i interwału są automatycznie zapisywane w localStorage i odtwarzane po restarcie.</div>
   </div>
 
   <script>
-    const $ = s=>document.querySelector(s), $$ = s=>document.querySelectorAll(s);
+    const $ = s=>document.querySelector(s);
+    const TV_SYMBOL_KEY='tv.symbol.v1';
+    const TF_LEFT_KEY='tv.tf.left';
+    const TF_RIGHT_KEY='tv.tf.right';
 
-    // ===== TradingView loader z retry i fallback linkiem =====
-    let tvRetry=0;
-    const TV_SYMBOL_KEY='tv.symbol.v1', TV_INTERVAL_KEY='tv.interval.v1', TV_AUTOSTART_KEY='tv.autostart.v1', TV_OFFLINE_KEY='tv.offline.v1';
+    function saveTVPrefs(){ try{ localStorage.setItem(TV_SYMBOL_KEY,$('#tvSymbol').value); localStorage.setItem(TF_LEFT_KEY,$('#tfLeft').value); localStorage.setItem(TF_RIGHT_KEY,$('#tfRight').value);}catch(e){} }
+    function applySavedTVPrefs(){ try{ const s=localStorage.getItem(TV_SYMBOL_KEY); const l=localStorage.getItem(TF_LEFT_KEY); const r=localStorage.getItem(TF_RIGHT_KEY); if(s) $('#tvSymbol').value=s; if(l) $('#tfLeft').value=l; if(r) $('#tfRight').value=r;}catch(e){} }
 
-    function saveTVPrefs(){ try{ localStorage.setItem(TV_SYMBOL_KEY,$('#tvSymbol').value); localStorage.setItem(TV_INTERVAL_KEY,$('#tvInterval').value); localStorage.setItem(TV_AUTOSTART_KEY,$('#tvAutostart').checked?'1':'0'); localStorage.setItem(TV_OFFLINE_KEY,$('#tvOffline').checked?'1':'0'); }catch(e){} }
-    function applyTVPrefs(){ try{ const s=localStorage.getItem(TV_SYMBOL_KEY); const i=localStorage.getItem(TV_INTERVAL_KEY); const a=localStorage.getItem(TV_AUTOSTART_KEY); const o=localStorage.getItem(TV_OFFLINE_KEY); if(s) $('#tvSymbol').value=s; if(i) $('#tvInterval').value=i; $('#tvAutostart').checked=a==='1'; $('#tvOffline').checked=o==='1'; }catch(e){} }
-    function setTVStatus(txt,ok){ const el=$('#tvStatus'); el.textContent=txt; el.style.color= ok?'var(--ok)':'var(--bad)'; }
+    function tvUrl(symbol, interval){ return `https://s.tradingview.com/widgetembed/?frameElementId=tvEmbed&symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}&hidesidetoolbar=1&hidetoptoolbar=1&symboledit=1&saveimage=1&toolbarbg=f1f3f6&studies=[]&theme=dark&style=1&timezone=Etc%2FUTC&withdateranges=1&allow_symbol_change=1&hideideas=1`; }
 
-    async function loadTVScript(){
-      if(window.TradingView) return; let last;
-      for(const url of ['https://s3.tradingview.com/tv.js','https://s.tradingview.com/tv.js']){
-        try{ await new Promise((res,rej)=>{ const s=document.createElement('script'); s.src=url; s.async=true; s.defer=true; s.onload=res; s.onerror=()=>rej(new Error('tv.js nie wczytany: '+url)); document.head.appendChild(s); }); if(window.TradingView) return; }
-        catch(e){ last=e; }
-      }
-      if(!window.TradingView) throw last||new Error('Nie udało się załadować tv.js');
+    function loadBoth(){ saveTVPrefs(); const s=$('#tvSymbol').value; $('#tvLeft').src=tvUrl(s,$('#tfLeft').value); $('#tvRight').src=tvUrl(s,$('#tfRight').value); $('#tvStatus').textContent='TV: OK'; $('#tvStatus').style.color='var(--ok)'; }
+
+    $('#reloadBoth').addEventListener('click', loadBoth);
+    $('#tvSymbol').addEventListener('change', loadBoth);
+    $('#tfLeft').addEventListener('change', loadBoth);
+    $('#tfRight').addEventListener('change', loadBoth);
+    window.addEventListener('load', ()=>{ applySavedTVPrefs(); loadBoth(); });
+
+    // ===== Sygnały (beta) =====
+    const CG_MAP={ 'CRYPTO:BTCUSD':'bitcoin', 'BINANCE:BTCUSDT':'bitcoin', 'CRYPTO:ETHUSD':'ethereum', 'BINANCE:ETHUSDT':'ethereum', 'BINANCE:SOLUSDT':'solana' };
+    function cgId(){ const s=$('#tvSymbol').value; return CG_MAP[s]||'bitcoin'; }
+
+    function rsi(values, period=14){ if(values.length<period+1) return null; const gains=[]; const losses=[]; for(let i=1;i<values.length;i++){ const ch=values[i]-values[i-1]; gains.push(Math.max(ch,0)); losses.push(Math.max(-ch,0)); }
+      let avgGain = gains.slice(0,period).reduce((a,b)=>a+b,0)/period; let avgLoss = losses.slice(0,period).reduce((a,b)=>a+b,0)/period; for(let i=period;i<gains.length;i++){ avgGain=(avgGain*(period-1)+gains[i])/period; avgLoss=(avgLoss*(period-1)+losses[i])/period; }
+      const rs = avgLoss===0? 100 : avgGain/avgLoss; const rsi = 100 - (100/(1+rs)); return rsi; }
+
+    function ema(values, period){ const k=2/(period+1); let emaVal=values[0]; for(let i=1;i<values.length;i++){ emaVal = values[i]*k + emaVal*(1-k); } return emaVal; }
+
+    async function fetchH4Prices(id){ // 7 dni ≈ 4h świece w CG
+      const url=`https://api.coingecko.com/api/v3/coins/${id}/ohlc?vs_currency=usd&days=7`;
+      const r=await fetch(url); const arr=await r.json(); // [ts, open, high, low, close]
+      return arr.map(x=>x[4]);
     }
+    async function fetchDailyCloses(id){ const url=`https://api.coingecko.com/api/v3/coins/${id}/market_chart?vs_currency=usd&days=400&interval=daily`; const r=await fetch(url); const j=await r.json(); return j.prices.map(x=>x[1]); }
 
-    function destroyTV(){ const el=$('#tvWidget'); if(el) el.innerHTML=''; }
+    function beep(){ try{ const ctx=new (window.AudioContext||window.webkitAudioContext)(); const o=ctx.createOscillator(); const g=ctx.createGain(); o.type='sine'; o.frequency.value=880; o.connect(g); g.connect(ctx.destination); o.start(); g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime+0.3); setTimeout(()=>o.stop(), 320); }catch(e){} }
 
-    async function initTV(){
-      saveTVPrefs();
-      if($('#tvOffline').checked){ destroyTV(); setTVStatus('TV: offline', true); $('#tvWidget').innerHTML='<div class="muted">Tryb offline: wykres wyłączony. Odznacz, aby załadować.</div>'; return; }
-      $('#tvWidget').innerHTML='<div class="muted">Ładuję wykres…</div>';
-      try{
-        await loadTVScript(); destroyTV();
-        new TradingView.widget({ container_id:'tvWidget', autosize:true, symbol:$('#tvSymbol').value, interval:$('#tvInterval').value, timezone:'Etc/UTC', theme:'dark', style:'1', locale:'pl', allow_symbol_change:true, studies:['RSI@tv-basicstudies','MAExp@tv-basicstudies','MAExp@tv-basicstudies'] });
-        setTVStatus('TV: OK'+(tvRetry?` (po próbie ${tvRetry+1})`:''), true); tvRetry=0;
-        // fallback po 5s
-        setTimeout(()=>{ if(!document.querySelector('#tvWidget iframe')){ const url='https://www.tradingview.com/chart/?symbol='+encodeURIComponent($('#tvSymbol').value); $('#tvWidget').innerHTML=`<div class="muted">Widget zablokowany. <a href="${url}" target="_blank" rel="noopener">Otwórz wykres w TradingView</a>.</div>`; setTVStatus('TV: fallback (link)', false);} }, 5000);
-      }catch(e){
-        setTVStatus('TV: BŁĄD – ponawiam…', false);
-        if(tvRetry<3){ const wait=Math.pow(2,tvRetry)*1500; tvRetry++; setTimeout(initTV, wait); }
-        else { $('#tvWidget').innerHTML='<div class="muted">Błąd: '+e.message+' — sprawdź połączenie lub zgodę dla domen TradingView. Kliknij „Załaduj wykres”, aby spróbować ponownie.</div>'; tvRetry=0; }
-      }
-    }
+    async function runScan(){ const out=[]; const id=cgId(); $('#sigStatus').textContent='Skanuję…'; try{
+        // H4 RSI
+        const h4=await fetchH4Prices(id); const last=h4[h4.length-1], prev=h4[h4.length-2];
+        const rsiVal=rsi(h4,14);
+        let rsiBounce=false, rsiCross50=false;
+        if($('#sgRsiBounce').checked){ rsiBounce = rsiVal!==null && rsiVal>30 && Math.min(...h4.slice(-5))< last && rsi(h4.slice(0,-1),14)<30; }
+        if($('#sgCross50').checked){ const rPrev = rsi(h4.slice(0,-1),14); rsiCross50 = rPrev!==null && rPrev<50 && rsiVal>=50; }
+        out.push(`RSI(H4): ${rsiVal?rsiVal.toFixed(2):'n/a'}  Bounce<30: ${rsiBounce?'TAK':'nie'}  Cross↑50: ${rsiCross50?'TAK':'nie'}`);
+        // D1 trend EMA
+        let trendOk=true; if($('#sgTrend').checked){ const d=await fetchDailyCloses(id); const ema50=ema(d.slice(-260),50); const ema200=ema(d.slice(-260),200); const close=d[d.length-1]; trendOk = close>ema50 && ema50>ema200; out.push(`Trend(D1): close ${close.toFixed(2)} | EMA50 ${ema50.toFixed(2)} | EMA200 ${ema200.toFixed(2)} → ${trendOk?'OK':'NIE'}`); }
+        const fire = (rsiBounce||rsiCross50) && trendOk; $('#sigStatus').textContent = fire? 'Sygnał: TAK' : 'Sygnał: brak'; $('#sigStatus').style.color = fire? 'var(--ok)':'var(--muted)'; if(fire) beep();
+      }catch(e){ out.push('Błąd skanera: '+e.message); $('#sigStatus').textContent='Sygnały: błąd'; $('#sigStatus').style.color='var(--bad)'; }
+      $('#sigLog').textContent=out.join('
+'); }
 
-    function updateTV(){ saveTVPrefs(); initTV(); }
-
-    $('#reloadTV').onclick=()=>initTV();
-    $('#resetTV').onclick=()=>{ [TV_SYMBOL_KEY,TV_INTERVAL_KEY,TV_AUTOSTART_KEY,TV_OFFLINE_KEY].forEach(k=>localStorage.removeItem(k)); applyTVPrefs(); setTVStatus('TV: ustawienia zresetowane', true); };
-    $('#tvSymbol').onchange=updateTV; $('#tvInterval').onchange=updateTV; $('#tvAutostart').onchange=saveTVPrefs; $('#tvOffline').onchange=initTV;
-
-    window.addEventListener('load', ()=>{ applyTVPrefs(); if($('#tvAutostart').checked) initTV(); });
-
-    // ===== Portfel =====
-    const PF_KEY='pf.v1'; const pf=JSON.parse(localStorage.getItem(PF_KEY)||'[]');
-    async function priceUSD(sym){ const map={btc:'bitcoin',eth:'ethereum',sol:'solana',ada:'cardano',avax:'avalanche-2',ltc:'litecoin',xrp:'ripple'}; const id=map[sym.toLowerCase()]||sym.toLowerCase(); const r=await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(id)}&vs_currencies=usd`); const j=await r.json(); return j[id]&&j[id].usd?+j[id].usd:0; }
-    function savePF(){ localStorage.setItem(PF_KEY, JSON.stringify(pf)); }
-    async function renderPF(){ const tb=$('#pfTable tbody'); tb.innerHTML=''; let sumV=0,sumC=0; for(const [i,pos] of pf.entries()){ let p=0; try{ p=await priceUSD(pos.sym);}catch(e){} const val=p*pos.qty, cost=pos.cost*pos.qty, pl=val-cost; sumV+=val; sumC+=cost; const tr=document.createElement('tr'); tr.innerHTML=`<td>${pos.sym.toUpperCase()}</td><td class="right">${pos.qty}</td><td class="right">$${p.toFixed(2)}</td><td class="right">$${val.toFixed(2)}</td><td class="right">$${cost.toFixed(2)}</td><td class="right ${pl>=0?'green':'red'}">$${pl.toFixed(2)}</td><td><button data-i="${i}" class="del">Usuń</button></td>`; tb.appendChild(tr);} $('#sumVal').textContent=`$${sumV.toFixed(2)}`; $('#sumCost').textContent=`$${sumC.toFixed(2)}`; const spl=sumV-sumC; $('#sumPL').textContent=`$${spl.toFixed(2)}`; $('#sumPL').className=`right ${spl>=0?'green':'red'}`; $$('#pfTable .del').forEach(b=> b.onclick=()=>{ pf.splice(+b.dataset.i,1); savePF(); renderPF();}); }
-    $('#addPos').onclick=()=>{ const sym=$('#sym').value.trim(); const qty=parseFloat($('#qty').value); const cost=parseFloat($('#cost').value); if(!sym||!qty||!cost){alert('Uzupełnij symbol, ilość i koszt.'); return;} pf.push({sym,qty,cost}); savePF(); renderPF(); $('#sym').value=''; $('#qty').value=''; $('#cost').value=''; };
-    renderPF();
-
-    // ===== Dziennik =====
-    const LOG_KEY='log.v1'; const log=JSON.parse(localStorage.getItem(LOG_KEY)||'[]');
-    function saveLog(){ localStorage.setItem(LOG_KEY, JSON.stringify(log)); }
-    function renderLog(){ const tb=$('#logTable tbody'); tb.innerHTML=''; log.forEach((r,i)=>{ const tr=document.createElement('tr'); tr.innerHTML=`<td>${r.d||''}</td><td>${r.s||''}</td><td>${r.e||''}</td><td>${r.r||''}</td><td>${r.p||''}</td><td>${r.w||''}</td><td>${r.l||''}</td><td><button data-i="${i}" class="rm">Usuń</button></td>`; tb.appendChild(tr); }); $$('#logTable .rm').forEach(b=> b.onclick=()=>{ log.splice(+b.dataset.i,1); saveLog(); renderLog();}); }
-    renderLog();
-    $('#addLog').onclick=()=>{ const r={ d:$('#jDate').value, s:$('#jSetup').value, e:$('#jEntry').value, r:$('#jReason').value, p:$('#jPlan').value, w:$('#jResult').value, l:$('#jLesson').value }; log.push(r); saveLog(); renderLog(); ['#jDate','#jSetup','#jEntry','#jReason','#jPlan','#jResult','#jLesson'].forEach(id=> $(id).value=''); };
-
-    // ===== Backup wszystkich danych =====
-    $('#exportAll').onclick=()=>{ const blob=new Blob([JSON.stringify({pf,log},null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='crypto_desk_backup.json'; a.click(); };
-    $('#importAll').onchange=ev=>{ const f=ev.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=()=>{ try{ const data=JSON.parse(r.result); if(data.pf) localStorage.setItem('pf.v1', JSON.stringify(data.pf)); if(data.log) localStorage.setItem('log.v1', JSON.stringify(data.log)); location.reload(); }catch(e){ alert('Błędny plik.'); } }; r.readAsText(f); };
-
-    // ===== PWA =====
-    let deferredPrompt; window.addEventListener('beforeinstallprompt', e=>{ e.preventDefault(); deferredPrompt=e; $('#installPWA').style.display='inline-flex'; });
-    $('#installPWA').onclick=()=>{ if(deferredPrompt){ deferredPrompt.prompt(); deferredPrompt=null; } else { alert('Android: Menu → "Dodaj do ekranu głównego"'); } };
-
-    // ===== Self‑tests =====
-    function badge(el, ok, msg){ el.textContent = msg || (ok?'OK':'BŁĄD'); el.style.color=ok?'var(--ok)':'var(--bad)'; el.style.borderColor=ok?'rgba(134,239,172,.6)':'rgba(252,165,165,.6)'; }
-    async function runTests(){ const out=[]; const logm=s=>{ out.push(s); $('#testLog').textContent=out.join('\n'); };
-      try{ await loadTVScript(); badge($('#tvBadge'), true, 'TV: OK'); logm('TradingView: OK'); }catch(e){ badge($('#tvBadge'), false, 'TV: BŁĄD'); logm('TradingView: '+e.message); }
-      try{ const p=await priceUSD('btc'); badge($('#cgBadge'), p>0, p>0?('CG: $'+p.toFixed(2)):'CG: BŁĄD'); logm('CoinGecko: '+(p>0?('$'+p.toFixed(2)):'BŁĄD')); }catch(e){ badge($('#cgBadge'), false, 'CG: BŁĄD'); logm('CoinGecko: '+e.message); }
-      try{ localStorage.setItem('t','1'); const v=localStorage.getItem('t'); localStorage.removeItem('t'); badge($('#lsBadge'), v==='1', v==='1'?'LS: OK':'LS: BLOKADA'); logm('localStorage: '+(v==='1'?'OK':'BLOKADA')); }catch(e){ badge($('#lsBadge'), false, 'LS: BLOKADA'); logm('localStorage: '+e.message); }
-    }
-    $('#runTests').onclick=runTests;
+    $('#runScan').onclick=runScan; $('#testBeep').onclick=beep;
+ loadTV(); });
   </script>
 </body>
 </html>
