@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Daniel – Crypto Desk</title>
-  <meta name="description" content="Prywatny kokpit: strategia hybrydowa, wykres TradingView, portfel + dziennik transakcji (localStorage)." />
+  <meta name="description" content="Prywatny kokpit: strategia hybrydowa, wykres TradingView (2×), portfel + dziennik (localStorage), sygnały i auto‑scan." />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
@@ -46,10 +46,10 @@
     <header>
       <div class="brand"><div class="logo"></div><div>
         <h1>Daniel – Crypto Desk</h1>
-        <div class="muted">Twój prywatny kokpit: strategia • wykres • portfel • dziennik • (zapamiętywanie ustawień działa automatycznie)</div>
+        <div class="muted">strategia • wykresy (2×) • portfel • dziennik • auto‑scan • zapis ustawień</div>
       </div></div>
       <div class="row">
-        <button class="pill" id="installPWA" title="Dodaj na ekran główny">➕ Dodaj do telefonu</button>
+        <button class="pill" id="installPWA" title="Dodaj na ekran główny" style="opacity:.6" disabled>➕ Dodaj do telefonu</button>
         <a class="pill" href="#" id="exportAll">⬇️ Eksport danych</a>
         <label class="pill" style="gap:4px">⬆️ Import <input type="file" id="importAll" accept="application/json" style="display:none"></label>
       </div>
@@ -174,130 +174,120 @@
 
     <div class="footer">© Daniel – prywatny kokpit. Ustawienia symbolu i interwału są automatycznie zapisywane w localStorage i odtwarzane po restarcie.</div>
   </div>
-<script>
-  const $ = s=>document.querySelector(s);
 
-  // ===== Preferencje wykresów =====
-  const TV_SYMBOL_KEY='tv.symbol.v1';
-  const TF_LEFT_KEY='tv.tf.left';
-  const TF_RIGHT_KEY='tv.tf.right';
-  function saveTVPrefs(){ try{ localStorage.setItem(TV_SYMBOL_KEY,$('#tvSymbol').value); localStorage.setItem(TF_LEFT_KEY,$('#tfLeft').value); localStorage.setItem(TF_RIGHT_KEY,$('#tfRight').value);}catch(e){} }
-  function applySavedTVPrefs(){ try{ const s=localStorage.getItem(TV_SYMBOL_KEY); const l=localStorage.getItem(TF_LEFT_KEY); const r=localStorage.getItem(TF_RIGHT_KEY); if(s) $('#tvSymbol').value=s; if(l) $('#tfLeft').value=l; if(r) $('#tfRight').value=r;}catch(e){} }
+  <!-- Pełny skrypt aplikacji -->
+  <script>
+    const $ = s=>document.querySelector(s), $$ = s=>document.querySelectorAll(s);
 
-  // ===== Dwa sposoby osadzania (fallback) =====
-  function tvUrlWidget(symbol, interval){
-    const p=new URLSearchParams({
-      frameElementId:'tvEmbed', symbol, interval,
-      hidesidetoolbar:'0', hidetoptoolbar:'0', symboledit:'1',
-      withdateranges:'1', toolbarbg:'f1f3f6', studies:'[]',
-      theme:'dark', style:'1', timezone:'Etc/UTC', allow_symbol_change:'1',
-      hideideas:'1', locale:'pl', uid: Date.now()+'' // cache buster
-    });
-    return 'https://s.tradingview.com/widgetembed/?'+p.toString();
-  }
-  function tvUrlAdvanced(symbol, interval){
-    const cfg = { symbol, interval, hide_top_toolbar:false, hide_side_toolbar:false,
-                  allow_symbol_change:true, locale:'pl', theme:'dark', autosize:true };
-    return 'https://s.tradingview.com/embed-widget/advanced-chart/?locale=pl#'
-           + encodeURIComponent(JSON.stringify(cfg));
-  }
+    // ===== Preferencje wykresów =====
+    const TV_SYMBOL_KEY='tv.symbol.v1';
+    const TF_LEFT_KEY='tv.tf.left';
+    const TF_RIGHT_KEY='tv.tf.right';
 
-  function loadInto(el, urlA, urlB, fbEl, label){
-    let loaded=false;
-    el.onload=()=>{ loaded=true; if(fbEl) fbEl.style.display='none'; };
-    el.src=urlA;                            // 1. klasyczny widget
-    setTimeout(()=>{ if(!loaded) el.src=urlB; }, 2500);  // 2. advanced-chart
-    setTimeout(()=>{ if(!loaded && fbEl){   // 3. link awaryjny
-      fbEl.style.display='block';
-      fbEl.innerHTML=`Nie udało się osadzić. <a href="${urlB}" target="_blank" rel="noopener">Otwórz ${label}</a>.`;
-    }}, 5000);
-  }
+    function saveTVPrefs(){ try{ localStorage.setItem(TV_SYMBOL_KEY,$('#tvSymbol').value); localStorage.setItem(TF_LEFT_KEY,$('#tfLeft').value); localStorage.setItem(TF_RIGHT_KEY,$('#tfRight').value);}catch(e){} }
+    function applySavedTVPrefs(){ try{ const s=localStorage.getItem(TV_SYMBOL_KEY); const l=localStorage.getItem(TF_LEFT_KEY); const r=localStorage.getItem(TF_RIGHT_KEY); if(s) $('#tvSymbol').value=s; if(l) $('#tfLeft').value=l; if(r) $('#tfRight').value=r;}catch(e){} }
 
-  function loadBoth(){
-    saveTVPrefs();
-    const s=$('#tvSymbol').value, l=$('#tfLeft').value, r=$('#tfRight').value;
-    loadInto($('#tvLeft'),  tvUrlWidget(s,l),  tvUrlAdvanced(s,l),  $('#leftFallback'),  `Trend (${l})`);
-    loadInto($('#tvRight'), tvUrlWidget(s,r), tvUrlAdvanced(s,r), $('#rightFallback'), `Wejście (${r})`);
-    $('#tvStatus').textContent='TV: OK'; $('#tvStatus').style.color='var(--ok)';
-  }
-
-  $('#reloadBoth').addEventListener('click', loadBoth);
-  $('#tvSymbol').addEventListener('change', loadBoth);
-  $('#tfLeft').addEventListener('change', loadBoth);
-  $('#tfRight').addEventListener('change', loadBoth);
-
-  // ===== Sygnały (beta) – RSI(H4) + filtr EMA(D1) =====
-  const CG_MAP={ 'CRYPTO:BTCUSD':'bitcoin','BINANCE:BTCUSDT':'bitcoin',
-                 'CRYPTO:ETHUSD':'ethereum','BINANCE:ETHUSDT':'ethereum',
-                 'BINANCE:SOLUSDT':'solana' };
-  const cgId = ()=> CG_MAP[$('#tvSymbol').value] || 'bitcoin';
-
-  function rsi(vals, p=14){
-    if(vals.length<p+1) return null;
-    const g=[], l=[]; for(let i=1;i<vals.length;i++){ const d=vals[i]-vals[i-1]; g.push(Math.max(d,0)); l.push(Math.max(-d,0)); }
-    let ag=g.slice(0,p).reduce((a,b)=>a+b,0)/p, al=l.slice(0,p).reduce((a,b)=>a+b,0)/p;
-    for(let i=p;i<g.length;i++){ ag=(ag*(p-1)+g[i])/p; al=(al*(p-1)+l[i])/p; }
-    const rs = al===0 ? 100 : ag/al; return 100 - (100/(1+rs));
-  }
-  function ema(vals,p){ const k=2/(p+1); let e=vals[0]; for(let i=1;i<vals.length;i++) e=vals[i]*k+e*(1-k); return e; }
-
-  async function fetchH4Closes(id){ const r=await fetch(`https://api.coingecko.com/api/v3/coins/${id}/ohlc?vs_currency=usd&days=7`); const a=await r.json(); return a.map(x=>x[4]); }
-  async function fetchDailyCloses(id){ const r=await fetch(`https://api.coingecko.com/api/v3/coins/${id}/market_chart?vs_currency=usd&days=400&interval=daily`); const j=await r.json(); return j.prices.map(x=>x[1]); }
-
-  function beep(){ try{ const ctx=new (window.AudioContext||window.webkitAudioContext)(); const o=ctx.createOscillator(), g=ctx.createGain(); o.type='sine'; o.frequency.value=880; o.connect(g); g.connect(ctx.destination); o.start(); g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime+0.3); setTimeout(()=>o.stop(),320);}catch(e){} }
-
-  async function runScan(){
-    const out=[]; const id=cgId(); $('#sigStatus').textContent='Skanuję…';
-    try{
-      const h4=await fetchH4Closes(id);
-      const cur=rsi(h4,14), prev=rsi(h4.slice(0,-1),14);
-      const bounce = $('#sgRsiBounce').checked && cur!==null && prev!==null && prev<30 && cur>30;
-      const cross50= $('#sgCross50').checked && prev!==null && cur!==null && prev<50 && cur>=50;
-      out.push(`RSI(H4): ${cur?cur.toFixed(2):'n/a'}  Bounce<30: ${bounce?'TAK':'nie'}  Cross↑50: ${cross50?'TAK':'nie'}`);
-
-      let trendOk=true;
-      if($('#sgTrend').checked){
-        const d=await fetchDailyCloses(id);
-        const e50=ema(d.slice(-260),50), e200=ema(d.slice(-260),200), close=d[d.length-1];
-        trendOk = close>e50 && e50>e200;
-        out.push(`Trend(D1): close ${close.toFixed(2)} | EMA50 ${e50.toFixed(2)} | EMA200 ${e200.toFixed(2)} → ${trendOk?'OK':'NIE'}`);
-      }
-
-      const fire=(bounce||cross50)&&trendOk;
-      $('#sigStatus').textContent = fire?'Sygnał: TAK':'Sygnał: brak';
-      $('#sigStatus').style.color = fire?'var(--ok)':'var(--muted)';
-      if(fire) beep();
-    }catch(e){
-      out.push('Błąd skanera: '+e.message);
-      $('#sigStatus').textContent='Sygnały: błąd';
-      $('#sigStatus').style.color='var(--bad)';
+    // ===== Budowa URL (2 metody) + unikalne frameId dla 2 iframów
+    function tvUrlWidget(symbol, interval, frameId){
+      const p=new URLSearchParams({frameElementId:frameId,symbol,interval,hidesidetoolbar:'0',hidetoptoolbar:'0',symboledit:'1',withdateranges:'1',toolbarbg:'f1f3f6',studies:'[]',theme:'dark',style:'1',timezone:'Etc/UTC',allow_symbol_change:'1',hideideas:'1',locale:'pl',uid:Date.now()+''});
+      return 'https://s.tradingview.com/widgetembed/?'+p.toString();
     }
-    $('#sigLog').textContent = out.join('\\n');
-  }
-  $('#runScan').onclick=runScan;
-  $('#testBeep').onclick=beep;
+    function tvUrlAdvanced(symbol, interval){
+      const cfg={symbol,interval,hide_top_toolbar:false,hide_side_toolbar:false,allow_symbol_change:true,locale:'pl',theme:'dark',autosize:true};
+      return 'https://s.tradingview.com/embed-widget/advanced-chart/?locale=pl#'+encodeURIComponent(JSON.stringify(cfg));
+    }
 
-  // ===== Auto-scan (OFF/5/15/30/60/240) =====
-  const SCAN_EVERY_KEY='scan.every.v1';
-  let scanTimer=null, tickTimer=null, nextAt=null, isScanning=false;
-  const minutesToMs=m=>m*60000, fmtTime=ts=>new Date(ts).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-  function setScanInfo(t){ $('#scanInfo').textContent=t; }
-  function clearAutoScan(){ if(scanTimer){clearTimeout(scanTimer); scanTimer=null;} if(tickTimer){clearInterval(tickTimer); tickTimer=null;} nextAt=null; }
-  function scheduleNext(){
-    const every=parseInt($('#scanEvery').value,10);
-    if(!every){ clearAutoScan(); setScanInfo('Auto-scan: OFF'); return; }
-    const ms=minutesToMs(every); nextAt=Date.now()+ms;
-    setScanInfo(`Auto-scan: co ${every} min • następny ≈ ${fmtTime(nextAt)}`);
-    clearAutoScan();
-    tickTimer=setInterval(()=>{ if(!nextAt) return; const mins=Math.max(0,Math.round((nextAt-Date.now())/60000)); setScanInfo(`Auto-scan: co ${every} min • następny ≈ ${fmtTime(nextAt)} (${mins}m)`); },15000);
-    scanTimer=setTimeout(async()=>{ if(isScanning) return; isScanning=true; await runScan(); isScanning=false; scheduleNext(); }, ms);
-  }
-  function applySavedScan(){ try{ const v=localStorage.getItem(SCAN_EVERY_KEY); if(v) $('#scanEvery').value=v; scheduleNext(); }catch(e){} }
-  $('#scanEvery').addEventListener('change', ()=>{ localStorage.setItem(SCAN_EVERY_KEY,$('#scanEvery').value); scheduleNext(); });
-  document.addEventListener('visibilitychange', ()=>{ if(document.hidden){ clearAutoScan(); } else { scheduleNext(); } });
+    // Loader z fallbackiem i linkiem awaryjnym
+    function loadInto(el,urlA,urlB,fbEl,label){
+      let loaded=false; el.onload=()=>{loaded=true;if(fbEl) fbEl.style.display='none';};
+      el.src=urlA;                                 // 1) widgetembed
+      setTimeout(()=>{ if(!loaded) el.src=urlB; }, 2500); // 2) advanced
+      setTimeout(()=>{ if(!loaded && fbEl){ fbEl.style.display='block'; fbEl.innerHTML=`Nie udało się osadzić. <a href="${urlB}" target="_blank" rel="noopener">Otwórz ${label}</a>.`; } }, 5000);
+    }
 
-  // start
-  window.addEventListener('load', ()=>{ applySavedTVPrefs(); loadBoth(); applySavedScan(); });
-</script>
+    function loadBoth(){
+      saveTVPrefs();
+      const s=$('#tvSymbol').value, l=$('#tfLeft').value, r=$('#tfRight').value;
+      loadInto($('#tvLeft'),  tvUrlWidget(s,l,'tvEmbedLeft'),  tvUrlAdvanced(s,l),  $('#leftFallback'),  `Trend (${l})`);
+      loadInto($('#tvRight'), tvUrlWidget(s,r,'tvEmbedRight'), tvUrlAdvanced(s,r), $('#rightFallback'), `Wejście (${r})`);
+      $('#tvStatus').textContent='TV: OK'; $('#tvStatus').style.color='var(--ok)';
+    }
 
-  
+    $('#reloadBoth').addEventListener('click', loadBoth);
+    $('#tvSymbol').addEventListener('change', loadBoth);
+    $('#tfLeft').addEventListener('change', loadBoth);
+    $('#tfRight').addEventListener('change', loadBoth);
+
+    // ===== Portfel =====
+    const PF_KEY='pf.v1'; const pf=JSON.parse(localStorage.getItem(PF_KEY)||'[]');
+    async function priceUSD(sym){
+      const map={btc:'bitcoin',eth:'ethereum',sol:'solana',ada:'cardano',avax:'avalanche-2',ltc:'litecoin',xrp:'ripple'};
+      const id=map[sym.toLowerCase()]||sym.toLowerCase();
+      const r=await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(id)}&vs_currencies=usd`);
+      const j=await r.json(); return j[id]&&j[id].usd?+j[id].usd:0;
+    }
+    function savePF(){ localStorage.setItem(PF_KEY, JSON.stringify(pf)); }
+    async function renderPF(){
+      const tb=$('#pfTable tbody'); tb.innerHTML=''; let sumV=0,sumC=0;
+      for(const [i,pos] of pf.entries()){
+        let p=0; try{ p=await priceUSD(pos.sym);}catch(e){}
+        const val=p*pos.qty, cost=pos.cost*pos.qty, pl=val-cost; sumV+=val; sumC+=cost;
+        const tr=document.createElement('tr');
+        tr.innerHTML=`<td>${pos.sym.toUpperCase()}</td><td class="right">${pos.qty}</td><td class="right">$${p.toFixed(2)}</td><td class="right">$${val.toFixed(2)}</td><td class="right">$${cost.toFixed(2)}</td><td class="right ${pl>=0?'green':'red'}">$${pl.toFixed(2)}</td><td><button data-i="${i}" class="del">Usuń</button></td>`;
+        tb.appendChild(tr);
+      }
+      $('#sumVal').textContent=`$${sumV.toFixed(2)}`; $('#sumCost').textContent=`$${sumC.toFixed(2)}`;
+      const spl=sumV-sumC; $('#sumPL').textContent=`$${spl.toFixed(2)}`; $('#sumPL').className=`right ${spl>=0?'green':'red'}`;
+      $$('#pfTable .del').forEach(b=> b.onclick=()=>{ pf.splice(+b.dataset.i,1); savePF(); renderPF();});
+    }
+    $('#addPos').onclick=()=>{ const sym=$('#sym').value.trim(); const qty=parseFloat($('#qty').value); const cost=parseFloat($('#cost').value); if(!sym||!qty||!cost){alert('Uzupełnij symbol, ilość i koszt.'); return;} pf.push({sym,qty,cost}); savePF(); renderPF(); $('#sym').value=''; $('#qty').value=''; $('#cost').value=''; };
+    renderPF();
+
+    // ===== Dziennik =====
+    const LOG_KEY='log.v1'; const log=JSON.parse(localStorage.getItem(LOG_KEY)||'[]');
+    function saveLog(){ localStorage.setItem(LOG_KEY, JSON.stringify(log)); }
+    function renderLog(){ const tb=$('#logTable tbody'); tb.innerHTML=''; log.forEach((r,i)=>{ const tr=document.createElement('tr'); tr.innerHTML=`<td>${r.d||''}</td><td>${r.s||''}</td><td>${r.e||''}</td><td>${r.r||''}</td><td>${r.p||''}</td><td>${r.w||''}</td><td>${r.l||''}</td><td><button data-i="${i}" class="rm">Usuń</button></td>`; tb.appendChild(tr); }); $$('#logTable .rm').forEach(b=> b.onclick=()=>{ log.splice(+b.dataset.i,1); saveLog(); renderLog();}); }
+    renderLog();
+    $('#addLog').onclick=()=>{ const r={ d:$('#jDate').value, s:$('#jSetup').value, e:$('#jEntry').value, r:$('#jReason').value, p:$('#jPlan').value, w:$('#jResult').value, l:$('#jLesson').value }; log.push(r); saveLog(); renderLog(); ['#jDate','#jSetup','#jEntry','#jReason','#jPlan','#jResult','#jLesson'].forEach(id=> $(id).value=''); };
+
+    // ===== Eksport/Import =====
+    $('#exportAll').onclick=()=>{ const blob=new Blob([JSON.stringify({pf,log},null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='crypto_desk_backup.json'; a.click(); };
+    $('#importAll').onchange=ev=>{ const f=ev.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=()=>{ try{ const data=JSON.parse(r.result); if(data.pf) localStorage.setItem('pf.v1', JSON.stringify(data.pf)); if(data.log) localStorage.setItem('log.v1', JSON.stringify(data.log)); location.reload(); }catch(e){ alert('Błędny plik.'); } }; r.readAsText(f); };
+
+    // ===== Sygnały (beta) =====
+    const CG_MAP={ 'CRYPTO:BTCUSD':'bitcoin','BINANCE:BTCUSDT':'bitcoin','CRYPTO:ETHUSD':'ethereum','BINANCE:ETHUSDT':'ethereum','BINANCE:SOLUSDT':'solana' };
+    const cgId = ()=> CG_MAP[$('#tvSymbol').value] || 'bitcoin';
+    function rsi(vals, p=14){ if(vals.length<p+1) return null; const g=[],l=[]; for(let i=1;i<vals.length;i++){ const d=vals[i]-vals[i-1]; g.push(Math.max(d,0)); l.push(Math.max(-d,0)); } let ag=g.slice(0,p).reduce((a,b)=>a+b,0)/p, al=l.slice(0,p).reduce((a,b)=>a+b,0)/p; for(let i=p;i<g.length;i++){ ag=(ag*(p-1)+g[i])/p; al=(al*(p-1)+l[i])/p; } const rs = al===0 ? 100 : ag/al; return 100 - (100/(1+rs)); }
+    function ema(vals,p){ const k=2/(p+1); let e=vals[0]; for(let i=1;i<vals.length;i++) e=vals[i]*k+e*(1-k); return e; }
+    async function fetchH4Closes(id){ const r=await fetch(`https://api.coingecko.com/api/v3/coins/${id}/ohlc?vs_currency=usd&days=7`); const a=await r.json(); return a.map(x=>x[4]); }
+    async function fetchDailyCloses(id){ const r=await fetch(`https://api.coingecko.com/api/v3/coins/${id}/market_chart?vs_currency=usd&days=400&interval=daily`); const j=await r.json(); return j.prices.map(x=>x[1]); }
+    function beep(){ try{ const ctx=new (window.AudioContext||window.webkitAudioContext)(); const o=ctx.createOscillator(), g=ctx.createGain(); o.type='sine'; o.frequency.value=880; o.connect(g); g.connect(ctx.destination); o.start(); g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime+0.3); setTimeout(()=>o.stop(),320);}catch(e){} }
+
+    async function runScan(){ const out=[]; const id=cgId(); $('#sigStatus').textContent='Skanuję…'; try{ const h4=await fetchH4Closes(id); const cur=rsi(h4,14), prev=rsi(h4.slice(0,-1),14); const bounce = $('#sgRsiBounce').checked && cur!==null && prev!==null && prev<30 && cur>30; const cross50= $('#sgCross50').checked && prev!==null && cur!==null && prev<50 && cur>=50; out.push(`RSI(H4): ${cur?cur.toFixed(2):'n/a'}  Bounce<30: ${bounce?'TAK':'nie'}  Cross↑50: ${cross50?'TAK':'nie'}`); let trendOk=true; if($('#sgTrend').checked){ const d=await fetchDailyCloses(id); const e50=ema(d.slice(-260),50), e200=ema(d.slice(-260),200), close=d[d.length-1]; trendOk = close>e50 && e50>e200; out.push(`Trend(D1): close ${close.toFixed(2)} | EMA50 ${e50.toFixed(2)} | EMA200 ${e200.toFixed(2)} → ${trendOk?'OK':'NIE'}`); } const fire=(bounce||cross50)&&trendOk; $('#sigStatus').textContent= fire?'Sygnał: TAK':'Sygnał: brak'; $('#sigStatus').style.color= fire?'var(--ok)':'var(--muted)'; if(fire) beep(); } catch(e){ out.push('Błąd skanera: '+e.message); $('#sigStatus').textContent='Sygnały: błąd'; $('#sigStatus').style.color='var(--bad)'; } $('#sigLog').textContent = out.join('\n'); }
+    $('#runScan').onclick=runScan; $('#testBeep').onclick=beep;
+
+    // ===== Auto‑scan (OFF/5/15/30/60/240) =====
+    const SCAN_EVERY_KEY='scan.every.v1'; let scanTimer=null, tickTimer=null, nextAt=null, isScanning=false;
+    const minutesToMs=m=>m*60000, fmtTime=ts=>new Date(ts).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+    function setScanInfo(t){ $('#scanInfo').textContent=t; }
+    function clearAutoScan(){ if(scanTimer){clearTimeout(scanTimer); scanTimer=null;} if(tickTimer){clearInterval(tickTimer); tickTimer=null;} nextAt=null; }
+    function scheduleNext(){ const every=parseInt($('#scanEvery').value,10); if(!every){ clearAutoScan(); setScanInfo('Auto‑scan: OFF'); return; } const ms=minutesToMs(every); nextAt=Date.now()+ms; setScanInfo(`Auto‑scan: co ${every} min • następny ≈ ${fmtTime(nextAt)}`); clearAutoScan(); tickTimer=setInterval(()=>{ if(!nextAt) return; const mins=Math.max(0, Math.round((nextAt-Date.now())/60000)); setScanInfo(`Auto‑scan: co ${every} min • następny ≈ ${fmtTime(nextAt)} (${mins}m)`); },15000); scanTimer=setTimeout(async()=>{ if(isScanning) return; isScanning=true; await runScan(); isScanning=false; scheduleNext(); }, ms); }
+    function applySavedScan(){ try{ const v=localStorage.getItem(SCAN_EVERY_KEY); if(v) $('#scanEvery').value=v; scheduleNext(); }catch(e){} }
+    $('#scanEvery').addEventListener('change', ()=>{ localStorage.setItem(SCAN_EVERY_KEY,$('#scanEvery').value); scheduleNext(); });
+    document.addEventListener('visibilitychange', ()=>{ if(document.hidden){ clearAutoScan(); } else { scheduleNext(); } });
+
+    // ===== PWA: manifest + service worker + przycisk "Dodaj do telefonu" =====
+    (function(){
+      function makeIcon(size){ const c=document.createElement('canvas'); c.width=c.height=size; const x=c.getContext('2d'); x.fillStyle='#0b0e14'; x.fillRect(0,0,size,size); const g=x.createRadialGradient(size*0.5,size*0.5,size*0.1,size*0.5,size*0.5,size*0.6); g.addColorStop(0,'#22d3ee'); g.addColorStop(1,'#8b5cf6'); x.fillStyle=g; x.beginPath(); x.arc(size/2,size/2,size*0.4,0,Math.PI*2); x.fill(); return c.toDataURL('image/png'); }
+      const icon192=makeIcon(192), icon512=makeIcon(512);
+      const manifest={ name:'Daniel – Crypto Desk', short_name:'Crypto Desk', start_url:'./', display:'standalone', background_color:'#0b0e14', theme_color:'#0b0e14', icons:[{src:icon192,sizes:'192x192',type:'image/png'},{src:icon512,sizes:'512x512',type:'image/png'}] };
+      const manBlob=new Blob([JSON.stringify(manifest)],{type:'application/manifest+json'}); const manURL=URL.createObjectURL(manBlob); const link=document.createElement('link'); link.rel='manifest'; link.href=manURL; document.head.appendChild(link);
+      if('serviceWorker' in navigator){ const swCode=`self.addEventListener('install',e=>{e.waitUntil(caches.open('desk-v1').then(c=>c.addAll(['./'])))});self.addEventListener('fetch',e=>{e.respondWith(fetch(e.request).catch(()=>caches.match('./')))});`; const swBlob=new Blob([swCode],{type:'text/javascript'}); const swURL=URL.createObjectURL(swBlob); navigator.serviceWorker.register(swURL).catch(()=>{}); }
+      let deferredPrompt=null; const btn=document.getElementById('installPWA'); window.addEventListener('beforeinstallprompt',(e)=>{ e.preventDefault(); deferredPrompt=e; btn.style.opacity='1'; btn.disabled=false; }); btn.addEventListener('click', async()=>{ if(!deferredPrompt) return; deferredPrompt.prompt(); try{ await deferredPrompt.userChoice; }catch(_){} deferredPrompt=null; });
+    })();
+
+    // ===== Start po załadowaniu =====
+    window.addEventListener('load', ()=>{ applySavedTVPrefs(); loadBoth(); applySavedScan(); });
+  </script>
+</body>
+</html>
