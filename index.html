@@ -116,10 +116,16 @@
     <div id="tvbtc" style="height:400px;"></div>
 <div id="tveth" style="height:400px; margin-top:16px;"></div>
 
+<!-- KONTENERY NA WYKRESY -->
+<div id="tvbtc" style="height:420px;"></div>
+<div id="tveth" style="height:420px; margin-top:16px;"></div>
+
+<!-- SKRYPT TRADINGVIEW -->
 <script src="https://s3.tradingview.com/tv.js"></script>
 <script>
   function initTV() {
     if (!window.TradingView) return;
+
     new TradingView.widget({
       container_id: "tvbtc",
       symbol: "BINANCE:BTCUSDT",
@@ -144,6 +150,21 @@
       backgroundColor: "rgba(0,0,0,1)"
     });
   }
+
+  // Odpal po gotowym DOM i załadowaniu tv.js
+  document.addEventListener('DOMContentLoaded', () => {
+    if (window.TradingView) initTV();
+    else {
+      const iv = setInterval(() => {
+        if (window.TradingView) {
+          clearInterval(iv);
+          initTV();
+        }
+      }, 50);
+    }
+  });
+</script>
+
 
   // 1) czekamy na DOM
   document.addEventListener('DOMContentLoaded', () => {
