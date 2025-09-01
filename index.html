@@ -198,20 +198,41 @@
     }
 
     // Loader z fallbackiem i linkiem awaryjnym
-    function loadInto(el,urlA,urlB,fbEl,label){
-      let loaded=false; el.onload=()=>{loaded=true;if(fbEl) fbEl.style.display='none';};
-      el.src=urlA;                                 // 1) widgetembed
-      setTimeout(()=>{ if(!loaded) el.src=urlB; }, 2500); // 2) advanced
-      setTimeout(()=>{ if(!loaded && fbEl){ fbEl.style.display='block'; fbEl.innerHTML=`Nie udało się osadzić. <a href="${urlB}" target="_blank" rel="noopener">Otwórz ${label}</a>.`; } }, 5000);
+   function loadInto(el, urlA, fbEl, label){
+  let ok=false;
+  el.onload=()=>{ ok=true; if(fbEl) fbEl.style.display='none'; };
+  el.src = urlA; // tylko widgetembed
+  setTimeout(()=>{ 
+    if(!ok && fbEl){
+      fbEl.style.display='block';
+      fbEl.innerHTML = `Nie udało się osadzić. <a href="${urlA}" target="_blank" rel="noopener">Otwórz ${label}</a>.`;
     }
+  }, 5000);
+}
+
 
     function loadBoth(){
-      saveTVPrefs();
-      const s=$('#tvSymbol').value, l=$('#tfLeft').value, r=$('#tfRight').value;
-      loadInto($('#tvLeft'),  tvUrlWidget(s,l,'tvEmbedLeft'),  tvUrlAdvanced(s,l),  $('#leftFallback'),  `Trend (${l})`);
-      loadInto($('#tvRight'), tvUrlWidget(s,r,'tvEmbedRight'), tvUrlAdvanced(s,r), $('#rightFallback'), `Wejście (${r})`);
-      $('#tvStatus').textContent='TV: OK'; $('#tvStatus').style.color='var(--ok)';
-    }
+  saveTVPrefs();
+  const s=$('#tvSymbol').value, l=$('#tfLeft').value, r=$('#tfRight').value;
+
+  loadInto(
+    $('#tvLeft'),
+    tvUrlWidget(s, l, 'tvEmbedLeft'),
+    $('#leftFallback'),
+    `Trend (${l})`
+  );
+
+  loadInto(
+    $('#tvRight'),
+    tvUrlWidget(s, r, 'tvEmbedRight'),
+    $('#rightFallback'),
+    `Wejście (${r})`
+  );
+
+  $('#tvStatus').textContent='TV: OK';
+  $('#tvStatus').style.color='var(--ok)';
+}
+
 
     $('#reloadBoth').addEventListener('click', loadBoth);
     $('#tvSymbol').addEventListener('change', loadBoth);
